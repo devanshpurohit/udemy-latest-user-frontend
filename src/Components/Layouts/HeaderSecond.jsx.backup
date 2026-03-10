@@ -1,0 +1,2118 @@
+import React, { useState, useRef, useEffect } from "react";
+
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+
+import { faArrowRightToBracket, faBell, faBorderAll, faCheck, faChevronDown, faChevronUp, faClose, faEnvelope, faEye, faKitMedical, faLocationCrosshairs, faLocationDot, faPhone, faSearch, faTimes, faUser } from "@fortawesome/free-solid-svg-icons";
+
+import { FaUser } from "react-icons/fa";
+
+import { NavLink, useNavigate } from "react-router-dom";
+
+import { BsCreditCardFill } from "react-icons/bs";
+
+import { IoInformationCircle } from "react-icons/io5";
+
+import { FaCartShopping } from "react-icons/fa6";
+
+import { IoBook } from "react-icons/io5";
+
+import { FiLogOut } from "react-icons/fi";
+
+import { isLoggedIn, getStoredUser, logout } from "../../services/authService";
+
+
+
+
+
+
+
+const HeaderSecond = () => {
+
+    const [menuOpen, setMenuOpen] = useState(false);
+
+    const [catOpen, setCatOpen] = useState(false);
+
+    const [user, setUser] = useState(null);
+
+    const navigate = useNavigate();
+
+
+
+    const dropdownRef = useRef(null);
+    const headerRef = useRef(null);
+
+
+
+    useEffect(() => {
+
+        // Check if user is logged in
+
+        if (isLoggedIn()) {
+
+            const userData = getStoredUser();
+
+            setUser(userData);
+
+            console.log('👤 User loaded in HeaderSecond:', userData);
+
+        }
+
+    }, []);
+
+
+
+    const toggleMenu = () => {
+
+        setMenuOpen(!menuOpen);
+
+        setCatOpen(false);
+
+    };
+
+
+
+    const closeMenu = () => {
+
+        setMenuOpen(false);
+
+        setCatOpen(false);
+
+    };
+
+
+
+    const handleLogout = () => {
+
+        console.log('🚪 HeaderSecond logging out user:', user);
+
+        logout();
+
+        setUser(null);
+
+        window.location.href = '/login';
+
+    };
+
+
+
+    const handleLogin = () => {
+
+        window.location.href = '/login';
+
+    };
+
+
+
+    useEffect(() => {
+
+        const handleClickOutside = (e) => {
+
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+
+                setCatOpen(false);
+
+            }
+
+        };
+
+
+
+        document.addEventListener("mousedown", handleClickOutside);
+
+        return () => {
+
+            document.removeEventListener("mousedown", handleClickOutside);
+
+        };
+
+    }, []);
+
+
+
+    const [open, setOpen] = useState(false);
+
+    const [isFixed, setIsFixed] = useState(false);
+    const [headerHeight, setHeaderHeight] = useState(0);
+
+
+    useEffect(() => {
+
+        if (headerRef.current) {
+
+            setHeaderHeight(headerRef.current.offsetHeight);
+
+        }
+
+    }, []);
+
+
+
+    useEffect(() => {
+
+        const handleScroll = () => {
+
+            setIsFixed(window.scrollY > 50);
+
+        };
+
+
+
+        window.addEventListener("scroll", handleScroll);
+
+        return () => window.removeEventListener("scroll", handleScroll);
+
+    }, []);
+
+
+
+
+
+    // Mobile view no scroll
+
+    useEffect(() => {
+
+        if (menuOpen) {
+
+            document.body.style.overflow = "hidden";
+
+            document.body.style.touchAction = "none";
+
+        } else {
+
+            document.body.style.overflow = "";
+
+            document.body.style.touchAction = "";
+
+        }
+
+
+
+        return () => {
+
+            document.body.style.overflow = "";
+
+            document.body.style.touchAction = "";
+
+        };
+
+    }, [menuOpen]);
+
+
+
+
+
+    // Get user data for display
+
+    const getUserDisplayName = () => {
+
+        if (!user) return 'Guest';
+
+        
+
+        // Try different ways to get user name
+
+        if (user.name) return user.name;
+
+        if (user.email) {
+
+            const emailParts = user.email.split('@');
+
+            return emailParts[0]; // Return part before @
+
+        }
+
+        if (user.id) return `User ${user.id}`;
+
+        return 'User';
+
+    };
+
+
+
+
+
+    return (
+
+        <>
+
+            {/* <nav className="navbar navbar-expand-lg navbar-light-box"> */}
+
+            <nav ref={headerRef}
+
+                className={`navbar navbar-expand-lg navbar-light-box ${isFixed ? "header-fixed" : ""}`}>
+
+                <div className="container">
+
+                    <NavLink className="navbar-brand me-0" to="/">
+
+                        <img src="/Logo.png" alt="Logo" className="logo-img" />
+
+                    </NavLink>
+
+
+
+                    <button className="navbar-toggler" type="button" onClick={toggleMenu}>
+
+                        <span className="navbar-toggler-icon" />
+
+                    </button>
+
+
+
+                    <div
+
+                        className={`collapse navbar-collapse ${menuOpen ? "show" : ""}`}
+
+                        id="navbarSupportedContent"
+
+                    >
+
+                        <div className="mobile-close-btn d-lg-none">
+
+                            <FontAwesomeIcon icon={faTimes} onClick={closeMenu} />
+
+                        </div>
+
+
+
+                        <ul className="navbar-nav mx-auto mb-2 navbar-menu-list">
+
+                            <li className="nav-item">
+
+                                <NavLink to="/" className="nav-link" onClick={closeMenu}>
+
+                                    Home
+
+                                </NavLink>
+
+                            </li>
+
+
+
+
+
+                            <li
+
+                                ref={dropdownRef}
+
+                                className={`nav-item dropdown ${catOpen ? "show" : ""}`}
+
+                            >
+
+                                <a
+
+                                    href="#"
+
+                                    className="nav-link d-flex align-items-center justify-content-between"
+
+                                    aria-expanded={catOpen}
+
+                                    onClick={(e) => {
+
+                                        e.preventDefault();
+
+                                        e.stopPropagation();
+
+                                        setCatOpen((prev) => !prev);
+
+                                    }}
+
+                                >
+
+                                    Categories
+
+                                    <FontAwesomeIcon
+
+                                        icon={faChevronDown}
+
+                                        className={`ms-2 chevron-icon ${catOpen ? "rotate" : ""}`}
+
+                                    />
+
+                                </a>
+
+
+
+                                <ul className={`dropdown-menu  tble-action-menu nw-dashboard admin-dropdown-card p-0 ${catOpen ? "show" : ""}`}>
+
+                                    <li className="prescription-item">
+
+                                        <a className="dropdown-item prescription-nav " href="#" onClick={closeMenu}>
+
+                                            Category 1
+
+                                        </a>
+
+                                    </li>
+
+                                    <li className="prescription-item">
+
+                                        <a className="dropdown-item prescription-nav " href="#" onClick={closeMenu}>
+
+                                            Category 2
+
+                                        </a>
+
+                                    </li>
+
+                                    <li className="prescription-item">
+
+                                        <a className="dropdown-item prescription-nav " href="#" onClick={closeMenu}>
+
+                                            Category 3
+
+                                        </a>
+
+                                    </li>
+
+                                </ul>
+
+                            </li>
+
+
+
+                            <li className="nav-item">
+
+                                <NavLink to="/my-course" className="nav-link" href="#" onClick={closeMenu}>
+
+                                    Course
+
+                                </NavLink>
+
+                            </li>
+
+
+
+                            <li className="nav-item">
+
+                                <a className="nav-link" href="#" onClick={closeMenu}>
+
+                                    FAQ
+
+                                </a>
+
+                            </li>
+
+
+
+                            <li className="nav-item">
+
+                                <a className="nav-link" href="#" onClick={closeMenu}>
+
+                                    Contact Us
+
+                                </a>
+
+                            </li>
+
+                        </ul>
+
+
+
+                        {/* <div className="d-flex align-items-center gap-2 flex-wrap">
+
+                                                    <a href="#" className="thm-btn" onClick={closeMenu} data-bs-toggle="modal" data-bs-target="#loginModal">
+
+                                                        <FaUser className="me-1" /> Login
+
+                                                    </a>
+
+                                                    <a href="#" className="thm-btn outline" onClick={closeMenu} data-bs-toggle="modal" data-bs-target="#login">
+
+                                                        Register Here
+
+                                                    </a>
+
+                                                </div> */}
+
+
+                                    </div>
+                                </div>
+
+                                <div className="header-user dropdown tp-right-admin-details d-flex align-items-center">
+                                    <a
+                                        href="#"
+                                        className="user-toggle d-flex align-items-center"
+                                        id="userMenu"
+                                        data-bs-toggle="dropdown"
+                                        aria-expanded={open}
+                                        onClick={() => setCatOpen(!catOpen)}
+                                    >
+                                        <div className="admn-icon me-2">
+                                            <img src="/user_01.jpg" alt="" />
+                                        </div>
+                                        <div className="profile-info me-1">
+                                            <h4 className="profile-name">Welcome</h4>
+                                            <p className="profile-id">{getUserDisplayName()}</p>
+                                        </div>
+                                        <FontAwesomeIcon
+                                            icon={open ? faChevronUp : faChevronDown}
+                                            className="location-active-icon"
+                                        />
+                                    </a>
+
+                                    <ul className={`dropdown-menu dropdown-menu-end user-dropdown sallr-drop-box  tble-action-menu admin-dropdown-card p-0 ${catOpen ? "show" : ""}`}>
+                                        <li className="prescription-item">
+                                            <NavLink to="/my-account" className="dropdown-item prescription-nav ">
+                                                My Account
+                                            </NavLink>
+                                        </li>
+                                        <li className="prescription-item">
+                                            <NavLink to="/my-dashboard" className="dropdown-item prescription-nav ">
+                                                My Dashboard
+                                            </NavLink>
+                                        </li>
+                                        <li className="prescription-item">
+                                            <NavLink to="/my-wishlist" className="dropdown-item prescription-nav ">
+                                                Wishlist
+                                            </NavLink>
+                                        </li>
+                                        <li className="prescription-item">
+                                            <button 
+                                                className="dropdown-item prescription-nav w-100 text-start border-0 bg-transparent"
+                                                onClick={handleLogout}
+                                            >
+                                                Logout
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </>
+                        ) : (
+                            // Not logged in - show login/register buttons
+                            <>
+                                <NavLink to="/login" className="btn btn-outline-primary me-2">
+                                    Login
+                                </NavLink>
+                                <NavLink to="/register" className="btn btn-primary">
+                                    Register
+                                </NavLink>
+                            </>
+                        )}
+
+                    </div>
+
+                </div>
+
+            </nav>
+
+
+
+            {/* Mobile overlay */}
+
+            {menuOpen && <div className="mobile-overlay" onClick={closeMenu}></div>}
+
+
+
+
+
+
+
+                 {/*Login Popup Start  */}
+
+                    {/* data-bs-toggle="modal" data-bs-target="#loginModal" */}
+
+                    <div className="modal step-modal fade" id="loginModal" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
+
+                        aria-labelledby="staticBackdropLabel" aria-hidden="true">
+
+                        <div className="modal-dialog modal-dialog-centered modal-xl">
+
+                            <div className="modal-content custom-modal-box p-0 rounded-0">
+
+                                <div className="text-end">
+
+                                </div>
+
+                                <div className="modal-body p-0">
+
+                                    <div className="row">
+
+                                        <div className="col-lg-6">
+
+                                            <div className="admin-picture-box">
+
+                                                <img src="/auth_banner.png" alt="" />
+
+                                            </div>
+
+                                        </div>
+
+                                        <div className="col-lg-6">
+
+                                            <div className="text-end pe-3 pt-3">
+
+                                                <button type="button" className="modal-close-btn text-black fz-18" data-bs-dismiss="modal" aria-label="Close">
+
+                                                    <FontAwesomeIcon icon={faClose} />
+
+                                                </button>
+
+                                            </div>
+
+        
+
+                                            <div className="login-container">
+
+                                                <div className="login-header-content">
+
+                                                    <div className="lg_sub_content">
+
+                                                        <h4>Log in to your websitename Account</h4>
+
+                                                    </div>
+
+        
+
+                                                    <form action="">
+
+                                                        <div className="custom-frm-bx">
+
+                                                            <input
+
+                                                                type="text"
+
+                                                                className="form-control profile-control pe-5"
+
+                                                                placeholder="Enter Username"
+
+                                                            />
+
+                                                            <div className="pass-toggle-box">
+
+                                                                <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faUser} />
+
+                                                                </button>
+
+                                                            </div>
+
+                                                        </div>
+
+        
+
+                                                        <div className="custom-frm-bx">
+
+                                                            <input
+
+                                                                type="text"
+
+                                                                className="form-control profile-control pe-5"
+
+                                                                placeholder="Enter 6 digit Password"
+
+                                                            />
+
+                                                            <div className="pass-toggle-box">
+
+                                                                <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faEye} />
+
+                                                                </button>
+
+                                                            </div>
+
+                                                        </div>
+
+        
+
+                                                        <div className='col-lg-12'>
+
+                                                            <div className='d-flex align-items-start justify-content-between'>
+
+                                                                <div className='term-check-box'>
+
+                                                                    <div className="d-flex align-items-center gap-2">
+
+                                                                        <input type="checkbox" id="check1" className="custom-checkbox" />
+
+                                                                        <label htmlFor="check1" className='remember-title mb-0'>Remember Me</label>
+
+                                                                    </div>
+
+                                                                </div>
+
+        
+
+                                                                <div className=''>
+
+                                                                    <NavLink to="/htmlForgot-password" className='reset-pass-btn' data-bs-toggle="modal" data-bs-target="#htmlForgotPasswordModal">Forgot Password?</NavLink>
+
+                                                                </div>
+
+                                                            </div>
+
+                                                        </div>
+
+                                                        <div className="my-4">
+
+                                                            <div>
+
+                                                                <button className="nw-thm-btn w-100">Login</button>
+
+                                                            </div>
+
+                                                        </div>
+
+                                                        <div className="udemy-tp-line">
+
+        
+
+                                                            <p>Don't have an account? <a href="#" className="udemy-back-login" data-bs-toggle="modal" data-bs-target="#login">Sign-up</a> </p>
+
+                                                        </div>
+
+        
+
+        
+
+                                                    </form>
+
+                                                </div>
+
+        
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    {/* Set Password End */}
+
+        
+
+        
+
+                    {/*Forgot Password Start  */}
+
+                    {/* data-bs-toggle="modal" data-bs-target="#htmlForgotPasswordModal" */}
+
+                    <div className="modal step-modal fade" id="htmlForgotPasswordModal" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
+
+                        aria-labelledby="staticBackdropLabel" aria-hidden="true">
+
+                        <div className="modal-dialog modal-dialog-centered modal-xl">
+
+                            <div className="modal-content custom-modal-box p-0 rounded-0">
+
+                                <div className="text-end">
+
+                                </div>
+
+                                <div className="modal-body p-0">
+
+                                    <div className="row">
+
+                                        <div className="col-lg-6">
+
+                                            <div className="admin-picture-box">
+
+                                                <img src="/auth_banner.png" alt="" />
+
+                                            </div>
+
+                                        </div>
+
+                                        <div className="col-lg-6">
+
+                                            <div className="text-end pe-3 pt-3">
+
+                                                <button type="button" className="modal-close-btn text-black fz-18" data-bs-dismiss="modal" aria-label="Close">
+
+                                                    <FontAwesomeIcon icon={faClose} />
+
+                                                </button>
+
+                                            </div>
+
+        
+
+                                            <div className="login-container">
+
+                                                <div className="login-header-content">
+
+                                                    <div className="lg_sub_content">
+
+                                                        <h6>Forgot Password</h6>
+
+                                                        <h4>Enter your Email Address htmlFor Verification</h4>
+
+                                                    </div>
+
+        
+
+                                                    <form action="">
+
+                                                        <div className="custom-frm-bx">
+
+                                                            <input
+
+                                                                type="email"
+
+                                                                className="form-control profile-control pe-5"
+
+                                                                placeholder="Enter Email Id"
+
+                                                            />
+
+                                                            <div className="pass-toggle-box">
+
+                                                                <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faEnvelope} />
+
+                                                                </button>
+
+                                                            </div>
+
+                                                        </div>
+
+                                                        <div className="my-4">
+
+                                                            <div>
+
+                                                                <button type="button" className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#otpEmailModal" >Continue</button>
+
+                                                                <div className="my-3 text-center">
+
+                                                                    <a href="#" className="card-back-btn" data-bs-toggle="modal" data-bs-target="#loginModal">Back</a>
+
+                                                                </div>
+
+                                                            </div>
+
+                                                        </div>
+
+        
+
+        
+
+                                                    </form>
+
+                                                </div>
+
+        
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    {/* Forgot Password End */}
+
+        
+
+        
+
+        
+
+        
+
+                    {/*Login Popup Start  */}
+
+                    {/* data-bs-toggle="modal" data-bs-target="#login" */}
+
+                    <div className="modal step-modal fade" id="login" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
+
+                        aria-labelledby="staticBackdropLabel" aria-hidden="true">
+
+                        <div className="modal-dialog modal-dialog-centered modal-xl">
+
+                            <div className="modal-content custom-modal-box p-0 rounded-0">
+
+                                <div className="text-end">
+
+        
+
+                                </div>
+
+                                <div className="modal-body p-0">
+
+                                    <div className="row">
+
+                                        <div className="col-lg-6">
+
+                                            <div className="admin-picture-box">
+
+                                                <img src="/auth_banner.png" alt="" />
+
+                                            </div>
+
+        
+
+                                        </div>
+
+                                        <div className="col-lg-6">
+
+        
+
+                                            <div className="text-end pe-3 pt-3">
+
+                                                <button type="button" className="modal-close-btn text-black fz-18" data-bs-dismiss="modal" aria-label="Close">
+
+                                                    <FontAwesomeIcon icon={faClose} />
+
+                                                </button>
+
+                                            </div>
+
+        
+
+                                            <div className="login-container">
+
+                                                <div className="login-header-content">
+
+                                                    <div className="lg_sub_content">
+
+                                                        <h4>Register your AI Card and unlock a smarter way to learn</h4>
+
+                                                    </div>
+
+        
+
+                                                    <form action="">
+
+                                                        <div className="custom-frm-bx">
+
+                                                            <input
+
+                                                                type="number"
+
+                                                                className="form-control profile-control pe-5"
+
+                                                                placeholder="Enter 12 Digit Card Number"
+
+                                                            />
+
+                                                            <div className="pass-toggle-box">
+
+                                                                <button type="button" className="pass-eye-btn"> <BsCreditCardFill />
+
+                                                                </button>
+
+                                                            </div>
+
+                                                        </div>
+
+                                                        <div className="custom-frm-bx">
+
+                                                            <input
+
+                                                                type="password"
+
+                                                                className="form-control profile-control pe-5"
+
+                                                                placeholder="CVV Number"
+
+                                                            />
+
+                                                        </div>
+
+                                                        <div>
+
+                                                          <span className="card-info-title">
+
+  <IoInformationCircle /> Check your AI Card for these details.
+
+</span>                                            </div>
+
+        
+
+                                                        <div className="my-5">
+
+                                                            <button type="button" className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#registerProfile">Continue</button>
+
+                                                        </div>
+
+        
+
+                                                        <div className="udemy-tp-line">
+
+                                                            <p>Already registered your AI Card? <a href="#" className="udemy-back-login" data-bs-toggle="modal" data-bs-target="#loginModal">Login</a> </p>
+
+                                                        </div>
+
+        
+
+        
+
+        
+
+        
+
+                                                    </form>
+
+                                                </div>
+
+        
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    {/*  Login Popup End */}
+
+        
+
+        
+
+        
+
+                    {/*Register Popup Start  */}
+
+                    {/* data-bs-toggle="modal" data-bs-target="#register" */}
+
+                    <div className="modal step-modal fade" id="register" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
+
+                        aria-labelledby="staticBackdropLabel" aria-hidden="true">
+
+                        <div className="modal-dialog modal-dialog-centered modal-xl">
+
+                            <div className="modal-content custom-modal-box p-0 rounded-0">
+
+                                <div className="text-end">
+
+        
+
+                                </div>
+
+                                <div className="modal-body p-0">
+
+                                    <div className="row">
+
+                                        <div className="col-lg-6">
+
+                                            <div className="admin-picture-box">
+
+                                                <img src="/auth_banner.png" alt="" />
+
+                                            </div>
+
+        
+
+                                        </div>
+
+                                        <div className="col-lg-6">
+
+        
+
+                                            <div className="text-end pe-3 pt-3">
+
+                                                <button type="button" className="modal-close-btn text-black fz-18" data-bs-dismiss="modal" aria-label="Close">
+
+                                                    <FontAwesomeIcon icon={faClose} />
+
+                                                </button>
+
+                                            </div>
+
+        
+
+                                            <div className="login-container">
+
+                                                <div className="login-header-content">
+
+                                                    <div className="lg_sub_content">
+
+                                                        <h4>Register to your website name Account</h4>
+
+                                                    </div>
+
+        
+
+                                                    <form action="">
+
+                                                        <div className="custom-frm-bx">
+
+                                                            <input
+
+                                                                type="number"
+
+                                                                className="form-control profile-control pe-5"
+
+                                                                placeholder="Enter 12 Digit Card Number"
+
+                                                            />
+
+                                                            <div className="pass-toggle-box">
+
+                                                                <button type="button" className="pass-eye-btn"> <BsCreditCardFill />
+
+                                                                </button>
+
+                                                            </div>
+
+                                                        </div>
+
+                                                        <div className="custom-frm-bx mb-2">
+
+                                                            <input
+
+                                                                type="password"
+
+                                                                className="form-control profile-control pe-5"
+
+                                                                placeholder="CVV Number"
+
+                                                            />
+
+                                                        </div>
+
+                                                        <div className="text-center">
+
+                                                            <span className="card-already-title">Your AI Card is already registered. Log in to continue.</span>
+
+                                                        </div>
+
+        
+
+                                                        <div className="mt-5">
+
+                                                            <div>
+
+                                                                <button className="nw-thm-btn w-100 udemy-not-btn">Continue</button>
+
+                                                            </div>
+
+        
+
+                                                            <div className="my-3 text-center">
+
+                                                                <a href="#" className="card-back-btn">Back</a>
+
+                                                            </div>
+
+                                                        </div>
+
+        
+
+                                                        <div className="udemy-tp-line">
+
+                                                            <p>Already registered your AI Card? <a href="#" className="udemy-back-login">Login</a> </p>
+
+                                                        </div>
+
+        
+
+        
+
+        
+
+        
+
+                                                    </form>
+
+                                                </div>
+
+        
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    {/*  Register Popup End */}
+
+        
+
+        
+
+        
+
+                    {/*Register Popup Start  */}
+
+                    {/* data-bs-toggle="modal" data-bs-target="#registerProfile" */}
+
+                    <div className="modal step-modal fade" id="registerProfile" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
+
+                        aria-labelledby="staticBackdropLabel" aria-hidden="true">
+
+                        <div className="modal-dialog modal-dialog-centered modal-xl">
+
+                            <div className="modal-content custom-modal-box p-0 rounded-0">
+
+                                <div className="text-end">
+
+        
+
+                                </div>
+
+                                <div className="modal-body p-0">
+
+                                    <div className="row">
+
+                                        <div className="col-lg-6">
+
+                                            <div className="admin-picture-box">
+
+                                                <img src="/auth_banner.png" alt="" />
+
+                                            </div>
+
+        
+
+                                        </div>
+
+                                        <div className="col-lg-6">
+
+        
+
+                                            <div className="text-end pe-3 pt-3">
+
+                                                <button type="button" className="modal-close-btn text-black fz-18" data-bs-dismiss="modal" aria-label="Close">
+
+                                                    <FontAwesomeIcon icon={faClose} />
+
+                                                </button>
+
+                                            </div>
+
+        
+
+                                            <div className="login-container">
+
+                                                <div className="login-header-content">
+
+                                                    <div className="lg_sub_content">
+
+                                                        <h4>Complete Your Profile</h4>
+
+                                                    </div>
+
+        
+
+                                                    <form action="">
+
+                                                        <div className='row'>
+
+                                                            <div className='col-lg-6'>
+
+                                                                <div className="custom-frm-bx">
+
+                                                                    <input
+
+                                                                        type="text"
+
+                                                                        className="form-control profile-control"
+
+                                                                        placeholder="First Name"
+
+                                                                    />
+
+                                                                </div>
+
+                                                            </div>
+
+        
+
+                                                            <div className='col-lg-6'>
+
+                                                                <div className="custom-frm-bx">
+
+                                                                    <input
+
+                                                                        type="text"
+
+                                                                        className="form-control profile-control"
+
+                                                                        placeholder="Last Name"
+
+                                                                    />
+
+                                                                </div>
+
+                                                            </div>
+
+        
+
+                                                            <div className='col-lg-12'>
+
+                                                                <div className="custom-frm-bx">
+
+                                                                    <input
+
+                                                                        type="email"
+
+                                                                        className="form-control profile-control"
+
+                                                                        placeholder="Email Address"
+
+        
+
+                                                                    />
+
+        
+
+                                                                    <div className="pass-toggle-box">
+
+                                                                        <button type="button" className="pass-eye-btn">  <FontAwesomeIcon icon={faEnvelope} />
+
+                                                                        </button>
+
+                                                                    </div>
+
+                                                                </div>
+
+                                                            </div>
+
+        
+
+                                                            <div className='col-lg-12'>
+
+                                                                <div className="custom-frm-bx">
+
+                                                                    <div className="login-custm-bx">
+
+                                                                        <select
+
+                                                                            name="countryCode"
+
+                                                                            id="countryCode"
+
+                                                                            className="country-code "
+
+                                                                        >
+
+                                                                            <option value="+91">+91</option>
+
+                                                                            <option value="+1">+1</option>
+
+                                                                            <option value="+44">+44</option>
+
+                                                                            <option value="+971">+971</option>
+
+                                                                        </select>
+
+        
+
+                                                                        <input
+
+                                                                            type="tel"
+
+                                                                            id="mobileNumber"
+
+                                                                            placeholder="Mobile Number"
+
+                                                                            className="form-control border-0 px-0 profile-control"
+
+        
+
+                                                                        />
+
+                                                                    </div>
+
+        
+
+                                                                    <div className="pass-toggle-box">
+
+                                                                        <button type="button" className="pass-eye-btn">  <FontAwesomeIcon icon={faPhone} />
+
+                                                                        </button>
+
+                                                                    </div>
+
+        
+
+                                                                </div>
+
+        
+
+                                                            </div>
+
+        
+
+                                                            <div className="mt-4">
+
+                                                                <div>
+
+                                                                    <button type="button" className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#otpModal">Continue</button>
+
+                                                                </div>
+
+        
+
+                                                                <div className="my-3 text-center">
+
+                                                                    <a href="#" className="card-back-btn" data-bs-toggle="modal" data-bs-target="#login">Back</a>
+
+                                                                </div>
+
+                                                            </div>
+
+        
+
+        
+
+        
+
+        
+
+                                                        </div>
+
+        
+
+        
+
+        
+
+        
+
+        
+
+                                                    </form>
+
+                                                </div>
+
+        
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    {/*  Register Popup End */}
+
+        
+
+        
+
+                    {/*Otp Popup Start  */}
+
+                    {/* data-bs-toggle="modal" data-bs-target="#otpModal" */}
+
+                    <div className="modal step-modal fade" id="otpModal" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
+
+                        aria-labelledby="staticBackdropLabel" aria-hidden="true">
+
+                        <div className="modal-dialog modal-dialog-centered modal-xl">
+
+                            <div className="modal-content custom-modal-box p-0 rounded-0">
+
+                                <div className="text-end">
+
+                                </div>
+
+                                <div className="modal-body p-0">
+
+                                    <div className="row">
+
+                                        <div className="col-lg-6">
+
+                                            <div className="admin-picture-box">
+
+                                                <img src="/auth_banner.png" alt="" />
+
+                                            </div>
+
+                                        </div>
+
+                                        <div className="col-lg-6">
+
+        
+
+                                            <div className="text-end pe-3 pt-3">
+
+                                                <button type="button" className="modal-close-btn text-black fz-18" data-bs-dismiss="modal" aria-label="Close">
+
+                                                    <FontAwesomeIcon icon={faClose} />
+
+                                                </button>
+
+                                            </div>
+
+        
+
+                                            <div className="login-container">
+
+                                                <div className="login-header-content">
+
+                                                    <div className="lg_sub_content">
+
+                                                        <h6>Enter Verification</h6>
+
+                                                        <h4>Enter the OTP sent to <span className="verify-email-title"> xyz@gmail.com</span> to continue.</h4>
+
+        
+
+                                                    </div>
+
+        
+
+                                                    <form action="">
+
+                                                        <div className='row'>
+
+                                                            <div className="col-lg-12">
+
+                                                                <div className="otp-wrapper custom-frm-bx">
+
+                                                                    <input type="number" className="otp-input" />
+
+                                                                    <input type="number" className="otp-input" />
+
+                                                                    <input type="number" className="otp-input" />
+
+                                                                    <input type="number" className="otp-input" />
+
+                                                                </div>
+
+                                                            </div>
+
+        
+
+                                                            <div className="mt-4">
+
+                                                                <div>
+
+                                                                    <button className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#setPasswordModal">Continue</button>
+
+                                                                </div>
+
+        
+
+                                                                <div className="my-3 text-center">
+
+                                                                    <a href="#" className="card-back-btn" data-bs-toggle="modal" data-bs-target="#registerProfile" >Back</a>
+
+                                                                </div>
+
+                                                            </div>
+
+        
+
+                                                            <div className="udemy-tp-line border-top-0">
+
+        
+
+                                                                <p>Didn't receive the code? <a href="#" className="udemy-back-login">Resend</a> <span className="resend-title">in 30s</span> </p>
+
+                                                            </div>
+
+        
+
+                                                        </div>
+
+                                                    </form>
+
+                                                </div>
+
+        
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    {/*  Otp Popup End */}
+
+        
+
+                    {/*Set Password Popup Start  */}
+
+                    {/* data-bs-toggle="modal" data-bs-target="#setPasswordModal" */}
+
+                    <div className="modal step-modal fade" id="setPasswordModal" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
+
+                        aria-labelledby="staticBackdropLabel" aria-hidden="true">
+
+                        <div className="modal-dialog modal-dialog-centered modal-xl">
+
+                            <div className="modal-content custom-modal-box p-0 rounded-0">
+
+                                <div className="text-end">
+
+                                </div>
+
+                                <div className="modal-body p-0">
+
+                                    <div className="row">
+
+                                        <div className="col-lg-6">
+
+                                            <div className="admin-picture-box">
+
+                                                <img src="/auth_banner.png" alt="" />
+
+                                            </div>
+
+                                        </div>
+
+                                        <div className="col-lg-6">
+
+        
+
+                                            <div className="text-end pe-3 pt-3">
+
+                                                <button type="button" className="modal-close-btn text-black fz-18" data-bs-dismiss="modal" aria-label="Close">
+
+                                                    <FontAwesomeIcon icon={faClose} />
+
+                                                </button>
+
+                                            </div>
+
+        
+
+                                            <div className="login-container">
+
+                                                <div className="login-header-content">
+
+                                                    <div className="lg_sub_content">
+
+                                                        <h6>Set Your Login Details</h6>
+
+                                                        <h4>Create a username and password to securely access your AI course.</h4>
+
+        
+
+                                                    </div>
+
+        
+
+                                                    <form action="">
+
+        
+
+                                                        <div className="custom-frm-bx">
+
+                                                            <input
+
+                                                                type="text"
+
+                                                                className="form-control profile-control pe-5"
+
+                                                                placeholder="XYZ"
+
+                                                            />
+
+                                                            <div className="pass-toggle-box">
+
+                                                                <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faUser} />
+
+                                                                </button>
+
+                                                            </div>
+
+                                                        </div>
+
+        
+
+                                                        <div className="custom-frm-bx">
+
+                                                            <input
+
+                                                                type="text"
+
+                                                                className="form-control profile-control pe-5"
+
+                                                                placeholder="Enter 6 digit Password"
+
+                                                            />
+
+                                                            <div className="pass-toggle-box">
+
+                                                                <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faEye} />
+
+                                                                </button>
+
+                                                            </div>
+
+                                                        </div>
+
+        
+
+                                                        <div className="custom-frm-bx mb-1" >
+
+                                                            <input
+
+                                                                type="text"
+
+                                                                className="form-control profile-control pe-5"
+
+                                                                placeholder="Confirm Password"
+
+                                                            />
+
+        
+
+                                                        </div>
+
+        
+
+                                                        <div className="text-end">
+
+                                                            <span className="verify-title">Password Verified</span>
+
+                                                        </div>
+
+        
+
+        
+
+                                                        <div className="mt-4">
+
+                                                            <div>
+
+                                                                <button type="button" className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#login">Continue</button>
+
+                                                            </div>
+
+        
+
+                                                        </div>
+
+        
+
+        
+
+                                                    </form>
+
+                                                </div>
+
+        
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    {/* Set Password End */}
+
+        
+
+        
+
+        
+
+                    {/*Otp Popup Start  */}
+
+                    {/* data-bs-toggle="modal" data-bs-target="#otpEmailModal" */}
+
+                    <div className="modal step-modal fade" id="otpEmailModal" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
+
+                        aria-labelledby="staticBackdropLabel" aria-hidden="true">
+
+                        <div className="modal-dialog modal-dialog-centered modal-xl">
+
+                            <div className="modal-content custom-modal-box p-0 rounded-0">
+
+                                <div className="text-end">
+
+                                </div>
+
+                                <div className="modal-body p-0">
+
+                                    <div className="row">
+
+                                        <div className="col-lg-6">
+
+                                            <div className="admin-picture-box">
+
+                                                <img src="/auth_banner.png" alt="" />
+
+                                            </div>
+
+                                        </div>
+
+                                        <div className="col-lg-6">
+
+        
+
+                                            <div className="text-end pe-3 pt-3">
+
+                                                <button type="button" className="modal-close-btn text-black fz-18" data-bs-dismiss="modal" aria-label="Close">
+
+                                                    <FontAwesomeIcon icon={faClose} />
+
+                                                </button>
+
+                                            </div>
+
+        
+
+                                            <div className="login-container">
+
+                                                <div className="login-header-content">
+
+                                                    <div className="lg_sub_content">
+
+                                                        <h6>Enter Verification</h6>
+
+                                                        <h4>Enter the OTP sent to <span className="verify-email-title"> xyz@gmail.com</span> to continue.</h4>
+
+        
+
+                                                    </div>
+
+        
+
+                                                    <form action="">
+
+                                                        <div className='row'>
+
+                                                            <div className="col-lg-12">
+
+                                                                <div className="otp-wrapper custom-frm-bx">
+
+                                                                    <input type="number" className="otp-input" />
+
+                                                                    <input type="number" className="otp-input" />
+
+                                                                    <input type="number" className="otp-input" />
+
+                                                                    <input type="number" className="otp-input" />
+
+                                                                </div>
+
+                                                            </div>
+
+        
+
+                                                            <div className="mt-3">
+
+                                                                <div>
+
+                                                                    <button type="button" className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#NewPasswordModal">Continue</button>
+
+                                                                </div>
+
+        
+
+                                                                <div className="my-2 text-center">
+
+                                                                    <a href="#" className="card-back-btn" data-bs-toggle="modal" data-bs-target="#htmlForgotPasswordModal">Back</a>
+
+                                                                </div>
+
+                                                            </div>
+
+        
+
+                                                            <div className="udemy-tp-line border-top-0">
+
+        
+
+                                                                <p>Didn't receive the code? <a href="#" className="udemy-back-login">Resend</a> <span className="resend-title">in 30s</span> </p>
+
+                                                            </div>
+
+        
+
+                                                        </div>
+
+                                                    </form>
+
+                                                </div>
+
+        
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    {/*  Otp Popup End */}
+
+        
+
+        
+
+                    {/*Forgot Password Start  */}
+
+                    {/* data-bs-toggle="modal" data-bs-target="#NewPasswordModal" */}
+
+                    <div className="modal step-modal fade" id="NewPasswordModal" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
+
+                        aria-labelledby="staticBackdropLabel" aria-hidden="true">
+
+                        <div className="modal-dialog modal-dialog-centered modal-xl">
+
+                            <div className="modal-content custom-modal-box p-0 rounded-0">
+
+                                <div className="text-end">
+
+                                </div>
+
+                                <div className="modal-body p-0">
+
+                                    <div className="row">
+
+                                        <div className="col-lg-6">
+
+                                            <div className="admin-picture-box">
+
+                                                <img src="/auth_banner.png" alt="" />
+
+                                            </div>
+
+                                        </div>
+
+                                        <div className="col-lg-6">
+
+                                            <div className="text-end pe-3 pt-3">
+
+                                                <button type="button" className="modal-close-btn text-black fz-18" data-bs-dismiss="modal" aria-label="Close">
+
+                                                    <FontAwesomeIcon icon={faClose} />
+
+                                                </button>
+
+                                            </div>
+
+        
+
+                                            <div className="login-container">
+
+                                                <div className="login-header-content">
+
+                                                    <div className="lg_sub_content">
+
+                                                        <h6>Secure Your Account</h6>
+
+                                                        <h4>Set a new password to keep your learning safe.</h4>
+
+                                                    </div>
+
+        
+
+                                                    <form action="">
+
+                                                        <div className="custom-frm-bx">
+
+                                                            <input
+
+                                                                type="email"
+
+                                                                className="form-control profile-control pe-5"
+
+                                                                placeholder="Enter New Password"
+
+                                                            />
+
+                                                            <div className="pass-toggle-box">
+
+                                                                <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faEye} />
+
+                                                                </button>
+
+                                                            </div>
+
+                                                        </div>
+
+                                                        <div className="custom-frm-bx">
+
+                                                            <input
+
+                                                                type="email"
+
+                                                                className="form-control profile-control pe-5"
+
+                                                                placeholder="Confirm Password"
+
+                                                            />
+
+                                                            <div className="pass-toggle-box">
+
+                                                                <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faEye} />
+
+                                                                </button>
+
+                                                            </div>
+
+                                                        </div>
+
+                                                        <div className="my-4">
+
+                                                            <div>
+
+                                                                <button type="button" className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#loginModal">Continue</button>
+
+                                                                <div className="my-3 text-center">
+
+                                                                    <a href="#" className="card-back-btn" data-bs-toggle="modal" data-bs-target="#otpEmailModal" >Back</a>
+
+                                                                </div>
+
+                                                            </div>
+
+                                                        </div>
+
+        
+
+        
+
+                                                    </form>
+
+                                                </div>
+
+        
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    {/* Forgot Password End */}
+
+        
+
+
+
+
+
+
+
+{/*Logout Popup Start  */}
+
+            {/* data-bs-toggle="modal" data-bs-target="#logout" */}
+
+            <div className="modal step-modal fade" id="logout" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
+
+                aria-labelledby="staticBackdropLabel" aria-hidden="true">
+
+                <div className="modal-dialog modal-dialog-centered modal-md">
+
+                    <div className="modal-content custom-modal-box">
+
+                        <div className="text-end">
+
+                            <button type="button" className="modal-close-btn" data-bs-dismiss="modal" aria-label="Close">
+
+                                <FontAwesomeIcon icon={faClose} />
+
+                            </button>
+
+                        </div>
+
+                        <div className="modal-body pt-0">
+
+                            <div className="row">
+
+                                <div className="col-lg-12">
+
+                                    <div className="logout-bx text-center" >
+
+                                        <span className="logout-icon"><FiLogOut /></span>
+
+                                        <p className="py-2">Are you sure you want to log out of your account?</p>
+
+
+
+                                        <div className="d-flex align-items-center gap-3 justify-content-center mt-3">
+
+                                            <button className="thm-lg-dg-btn outline" data-bs-dismiss="modal" aria-label="Close">Cancel</button>
+
+                                            <button className="thm-lg-dg-btn" data-bs-dismiss="modal" aria-label="Close">Logout</button>
+
+                                        </div>
+
+
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            {/*  Logout Popup End */}
+
+
+
+
+
+        </>
+
+    );
+
+};
+
+
+
+export default HeaderSecond;
+
