@@ -19,6 +19,7 @@ function Quiz() {
     const [courseTitle, setCourseTitle] = useState("");
     const [loading, setLoading] = useState(false);
     const [nextLesson, setNextLesson] = useState(null);
+    const [selectedAnswer, setSelectedAnswer] = useState(null);
 
     useEffect(() => {
         const fetchQuiz = async () => {
@@ -189,12 +190,13 @@ setNextLesson(nextLesson || null);
                                                         normalizedOptions.map((option, index) => (
                                                             <li className="booklet-anwser-item" key={index}>
                                                                 <label className="booklet-label">
-                                                                    <input
-                                                                        type="radio"
-                                                                        name="answer"
-                                                                        className="booklet-radio"
-                                                                        value={option}
-                                                                    />
+                                                                   <input
+  type="radio"
+  name="answer"
+  className="booklet-radio"
+  value={option}
+  onChange={() => setSelectedAnswer(option)}
+/>
                                                                     <span className="booklet-option-bx">
                                                                         {String.fromCharCode(97 + index)}.
                                                                     </span>{" "}
@@ -241,7 +243,31 @@ setNextLesson(nextLesson || null);
 
                                                 <div className="udemy-back-btn-box">
                                                     <button type="button" className="udemy-thm-btn outline" data-bs-toggle="modal" data-bs-target="#Not-Quiz">Clear Response</button>
-                                                    <button type="button" className="udemy-success-btn" data-bs-toggle="modal" data-bs-target="#submit-Quiz" >Submit Quiz</button>
+                                                  <button
+  type="button"
+  className="udemy-success-btn"
+  onClick={() => {
+
+    if (!selectedAnswer) {
+
+      const modal = new window.bootstrap.Modal(
+        document.getElementById("Not-Quiz")
+      );
+      modal.show();
+
+    } else {
+
+      const modal = new window.bootstrap.Modal(
+        document.getElementById("submit-Quiz")
+      );
+      modal.show();
+
+    }
+
+  }}
+>
+Submit Quiz
+</button>
                                                 </div>
                                             </div>
 
@@ -322,9 +348,21 @@ setNextLesson(nextLesson || null);
 
                                         <div className="d-flex align-items-center gap-3 justify-content-center mt-3 preview-modal-box">
                                             <button type="button"  className="thm-btn px-5 outline"onClick={() => navigate('/quiz-preview')} >Preview Quiz</button>
-                                         <button
+                     <button
   className="thm-btn px-5"
   onClick={() => {
+
+    const modalElement = document.getElementById("submit-Quiz");
+    const modalInstance = window.bootstrap.Modal.getInstance(modalElement);
+
+    if (modalInstance) {
+      modalInstance.hide();
+    }
+
+    // remove leftover backdrop
+    document.querySelectorAll(".modal-backdrop").forEach(el => el.remove());
+    document.body.classList.remove("modal-open");
+
     if (nextLesson) {
       navigate(`/course/${courseId}/learn`, {
         state: { lessonId: nextLesson._id }
@@ -332,6 +370,7 @@ setNextLesson(nextLesson || null);
     } else {
       navigate(`/course/${courseId}/learn`);
     }
+
   }}
 >
 Next Chapter

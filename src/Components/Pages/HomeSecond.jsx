@@ -54,6 +54,13 @@ const HomeSecond = () => {
     useEffect(() => {
         fetchCourses();
     }, []);
+    useEffect(() => {
+  if (courses.length > 0) {
+    splideRef1.current?.splide?.refresh();
+    splideRef2.current?.splide?.refresh();
+    splideRef3.current?.splide?.refresh();
+  }
+}, [courses]);
 
     const fetchCourses = async () => {
         try {
@@ -146,7 +153,7 @@ const HomeSecond = () => {
                                 <h2>Simple, practical AI concepts designed for school students.</h2>
                                 <p>Explore the basics of AI through guided lessons and real examples.Learn how artificial intelligence is shaping the world around us.</p>
                                 <div>
-                                    <button className='explore-btn'>Explore Courses</button>
+                                    <NavLink to= "/my-course" className='explore-btn'>Explore Courses</NavLink>
                                 </div>
                             </div>
                         </div>
@@ -197,7 +204,7 @@ const HomeSecond = () => {
                                 <div className="alert alert-danger">
                                     <h4>Error loading courses</h4>
                                     <p>{error}</p>
-                                    <button className="btn btn-primary" onClick={onRetry}>
+                                    <button className="btn btn-primary" onClick={fetchCourses}>
                                         Try Again
                                     </button>
                                 </div>

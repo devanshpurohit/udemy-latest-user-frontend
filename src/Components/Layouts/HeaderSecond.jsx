@@ -32,7 +32,20 @@ const HeaderSecond = () => {
         const cart = JSON.parse(localStorage.getItem('cart') || '[]');
         setCartItems(cart);
     }, []);
+useEffect(() => {
 
+    const updateCart = () => {
+        const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+        setCartItems(cart);
+    };
+
+    window.addEventListener("cartUpdated", updateCart);
+
+    return () => {
+        window.removeEventListener("cartUpdated", updateCart);
+    };
+
+}, []);
     // Listen for cart updates
     useEffect(() => {
         const handleStorageChange = () => {

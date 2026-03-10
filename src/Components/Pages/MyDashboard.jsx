@@ -617,8 +617,10 @@ function MyDashboard() {
                                                                     <tr>
                                                                         <th>S.No</th>
                                                                         <th>Certificate Name</th>
-                                                                        <th>Date</th>
-                                                                        <th>Actions</th>
+                                                                        <th>Payment Method</th>
+<th>Status</th>
+<th>Actions</th>
+                                                                       
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody>
@@ -682,36 +684,50 @@ function MyDashboard() {
                                                                         <th>Order Number</th>
                                                                         <th>Course</th>
                                                                         <th>Amount</th>
-                                                                        <th>Date</th>
-                                                                        <th>Status</th>
+                                                                                                                                                <th>Payment Method</th>
+<th>Status</th>
+<th>Actions</th>
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody>
                                                                     {dashboardData.orders && dashboardData.orders.length > 0 ? (
                                                                         dashboardData.orders.map((order, index) => (
-                                                                            <tr key={order._id}>
-                                                                                <td>{String(index + 1).padStart(2, '0')}.</td>
-                                                                                <td>{order.orderId}</td>
-                                                                                <td>
-                                                                                    <div className="admin-table-bx">
-                                                                                        <div className="admin-table-sub-bx">
-                                                                                            <img src={order.courseId?.courseImage || order.courseId?.thumbnail || order.courseId?.image || "/pic_01.jpg"} alt={order.courseId?.title} />
-                                                                                            <div className="admin-table-sub-details doctor-title">
-                                                                                                <h6>{order.courseId?.title}</h6>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </td>
-                                                                                <td>₹{order.amount}</td>
-                                                                                <td>{new Date(order.createdAt || Date.now()).toLocaleDateString()}</td>
-                                                                                <td>
-                                                                                    <span className="public-title">{order.paymentStatus}</span>
-                                                                                </td>
-                                                                            </tr>
+                                                                          <tr key={order._id}>
+  <td>{String(index + 1).padStart(2, '0')}.</td>
+  <td>{order.orderId}</td>
+
+  <td>
+    <div className="admin-table-bx">
+      <div className="admin-table-sub-bx">
+       <img
+src={order.courseId?.courseImage || "/pic_01.jpg"}
+alt={order.courseId?.title}
+/>
+        <div className="admin-table-sub-details doctor-title">
+          <h6>{order.courseId?.title}</h6>
+        </div>
+      </div>
+    </div>
+  </td>
+
+  <td>₹{order.amount}</td>
+
+  <td>{order.paymentMethod || "UPI"}</td>
+
+  <td>
+    <span className="public-title">{order.paymentStatus}</span>
+  </td>
+
+  <td>
+    <a href="#" className="dw-btn">
+      <FontAwesomeIcon icon={faDownload} />
+    </a>
+  </td>
+</tr>
                                                                         ))
                                                                     ) : (
                                                                         <tr>
-                                                                            <td colSpan="6" className="text-center">
+                                                                            <td colSpan="7" className="text-center">
                                                                                 <p className="text-muted">No order history found</p>
                                                                             </td>
                                                                         </tr>

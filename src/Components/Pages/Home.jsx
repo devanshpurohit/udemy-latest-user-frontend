@@ -135,23 +135,9 @@ function Home() {
                                 <h2>Simple, practical AI concepts designed for school students.</h2>
                                 <p>Explore the basics of AI through guided lessons and real examples.Learn how artificial intelligence is shaping the world around us.</p>
                                 <div className="d-flex gap-3 explore-signup-bx">
-                                <a
-  href="#"
-  className="explore-btn"
-  data-bs-toggle="modal"
-  data-bs-target="#loginModal"
->
-  Login
-</a>
-
-<a
-  href="#"
-  className="explore-btn"
-  data-bs-toggle="modal"
-  data-bs-target="#register"
->
-  Register
-</a>
+                                <div>
+                                    <NavLink to="my-course" className='explore-btn'>Explore Courses</NavLink>
+                                </div>
                                 </div>
                             </div>
                         </div>

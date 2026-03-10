@@ -46,6 +46,27 @@ function AddCart() {
             window.removeEventListener('focus', handleStorageChange);
         };
     }, []);
+    useEffect(() => {
+
+    const loadCartItems = () => {
+        const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+        setCartItems(cart);
+        setLoading(false);
+    };
+
+    loadCartItems();
+
+    const handleCartUpdate = () => {
+        loadCartItems();
+    };
+
+    window.addEventListener("cartUpdated", handleCartUpdate);
+
+    return () => {
+        window.removeEventListener("cartUpdated", handleCartUpdate);
+    };
+
+}, []);
     const handleCheckout = () => {
     const courseIds = cartItems.map(item => item._id);
 
@@ -55,11 +76,14 @@ function AddCart() {
 };
 
     // Remove item from cart
-    const removeFromCart = (courseId) => {
-        const updatedCart = cartItems.filter(item => item._id !== courseId);
-        setCartItems(updatedCart);
-        localStorage.setItem('cart', JSON.stringify(updatedCart));
-    };
+   const removeFromCart = (courseId) => {
+    const updatedCart = cartItems.filter(item => item._id !== courseId);
+    setCartItems(updatedCart);
+
+    localStorage.setItem('cart', JSON.stringify(updatedCart));
+
+    window.dispatchEvent(new Event("cartUpdated")); // ⭐ add this
+};
 
     // Calculate total price
     const calculateTotal = () => {
@@ -67,10 +91,12 @@ function AddCart() {
     };
 
     // Clear entire cart
-    const clearCart = () => {
-        setCartItems([]);
-        localStorage.setItem('cart', JSON.stringify([]));
-    };
+  const clearCart = () => {
+    setCartItems([]);
+    localStorage.setItem('cart', JSON.stringify([]));
+
+    window.dispatchEvent(new Event("cartUpdated"));
+};
 
     if (loading) {
         return (

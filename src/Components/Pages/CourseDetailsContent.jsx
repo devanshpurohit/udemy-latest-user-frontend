@@ -26,29 +26,21 @@ import { MdRateReview } from "react-icons/md";
 // 🎥 Check if video is YouTube
 const isYouTube = (url) => {
     if (!url) return false;
-
     return url.includes("youtube.com") || url.includes("youtu.be");
 };
-
-
 
 // 🎥 Extract YouTube video id
 const extractVideoId = (url) => {
     if (!url) return null;
-
-    const regExp =
-        /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
-
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
     const match = url.match(regExp);
-
-    return match ? match[1] : null;
+    return (match && match[2].length === 11) ? match[2] : null;
 };
+
 // 🎥 Get YouTube embed URL
 const getYouTubeEmbed = (url) => {
     const videoId = extractVideoId(url);
-
     if (!videoId) return "";
-
     return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
 };
 
@@ -66,8 +58,8 @@ function CourseDetailsContent({ course: propCourse }) {
     const [course, setCourse] = useState(location.state?.course || null);
     const [loading, setLoading] = useState(!location.state?.course);
     const [reviews, setReviews] = useState([]);
-    const [reviewText,setReviewText] = useState("")
-const [rating,setRating] = useState(5)
+    const [reviewText, setReviewText] = useState("")
+    const [rating, setRating] = useState(5)
 
     // 🎯 Check if user has purchased this course
     const [isPurchased, setIsPurchased] = useState(false);
@@ -98,38 +90,99 @@ const [rating,setRating] = useState(5)
     };
     const submitReview = async () => {
 
-const token = localStorage.getItem("token")
+        const token = localStorage.getItem("token")
 
-const res = await fetch(`${config.API_BASE_URL}/reviews/${course._id}`,{
+        const res = await fetch(`${config.API_BASE_URL}/reviews/${course._id}`, {
 
-method:"POST",
+            method: "POST",
 
-headers:{
-"Content-Type":"application/json",
-Authorization:`Bearer ${token}`
-},
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`
+            },
 
-body:JSON.stringify({
-rating:rating,
-comment:reviewText
-})
+            body: JSON.stringify({
+                rating: rating,
+                comment: reviewText
+            })
 
-})
+        })
 
-const data = await res.json()
+        const data = await res.json()
 
-if(data.success){
+        if (data.success) {
 
-alert("Review submitted")
+            alert("Review submitted")
 
-setReviewText("")
-setRating(5)
+            setReviewText("")
+            setRating(5)
 
-setReviews(prev=>[data.data,...prev])
+            setReviews(prev => [data.data, ...prev])
 
-}
+        }
 
-}
+    }
+    useEffect(() => {
+
+        if (!showVideo || !currentLesson?.videoUrl) return;
+        if (!isYouTube(currentLesson.videoUrl)) return;
+
+        let player;
+        let interval;
+
+        const loadPlayer = () => {
+
+            player = new window.YT.Player("youtube-player", {
+
+                events: {
+
+                    onReady: () => {
+
+                        interval = setInterval(() => {
+
+                            const duration = player.getDuration();
+                            const current = player.getCurrentTime();
+
+                            if (duration && current / duration >= 0.7) {
+
+                                console.log("Lesson auto completed");
+
+                                markLessonCompleted(currentLesson._id);
+
+                                clearInterval(interval);
+
+                            }
+
+                        }, 2000);
+
+                    }
+
+                }
+
+            });
+
+        };
+
+        if (!window.YT) {
+
+            const tag = document.createElement("script");
+            tag.src = "https://www.youtube.com/iframe_api";
+            document.body.appendChild(tag);
+
+            window.onYouTubeIframeAPIReady = loadPlayer;
+
+        } else {
+
+            loadPlayer();
+
+        }
+
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+
+    }, [showVideo, currentLesson]);
+
     useEffect(() => {
 
         const fetchReviews = async () => {
@@ -155,11 +208,6 @@ setReviews(prev=>[data.data,...prev])
     // 🎯 Fetch course data if not provided as prop
     useEffect(() => {
         // 🔥 If course already passed from previous page
-        if (location.state?.course) {
-            setCourse(location.state.course);
-            setLoading(false);
-            return;
-        }
 
         // If course is provided as prop, use it directly
         if (propCourse) {
@@ -171,6 +219,7 @@ setReviews(prev=>[data.data,...prev])
         // Otherwise fetch from API
         const fetchCourseData = async () => {
             try {
+
                 setLoading(true);
                 console.log('🔍 CourseDetailsContent: Fetching course data for ID:', id);
 
@@ -183,12 +232,16 @@ setReviews(prev=>[data.data,...prev])
                     headers['Authorization'] = `Bearer ${token}`;
                 }
 
+
                 const response = await fetch(`${config.API_BASE_URL}/public/courses/${id}`, {
-                    headers: headers
+                    headers: headers,
+                    cache: "no-store"
                 });
+
 
                 const data = await response.json();
                 console.log('🔍 CourseDetailsContent: API Response:', data);
+                console.log("Latest course data:", data.data);
 
                 if (data.success) {
                     setCourse(data.data);
@@ -351,6 +404,19 @@ setReviews(prev=>[data.data,...prev])
             saveProgress(newCompleted);
             return newCompleted;
         });
+
+        // ⭐ video complete hone par review modal open
+        setTimeout(() => {
+            openReviewModal();
+        }, 500);
+    };
+    const openReviewModal = () => {
+        const modalElement = document.getElementById("review-Add");
+
+        if (modalElement && window.bootstrap) {
+            const modal = new window.bootstrap.Modal(modalElement);
+            modal.show();
+        }
     };
 
     const calculateProgress = () => {
@@ -556,14 +622,31 @@ setReviews(prev=>[data.data,...prev])
                                                     return lessonVideo && (
                                                         <>
                                                             {isYouTube(lessonVideo) ? (
-                                                                <iframe
-                                                                    width="100%"
-                                                                    height="450"
-                                                                    src={`https://www.youtube.com/embed/${extractVideoId(lessonVideo)}?autoplay=1`}
-                                                                    frameBorder="0"
-                                                                    allowFullScreen
-                                                                    style={{ borderRadius: "12px" }}
-                                                                />
+                                                                <>
+                                                                    <iframe
+                                                                        id="youtube-player"
+                                                                        width="100%"
+                                                                        height="450"
+                                                                        src={`https://www.youtube.com/embed/${extractVideoId(lessonVideo)}?enablejsapi=1&origin=${window.location.origin}`}
+                                                                        frameBorder="0"
+                                                                        allow="autoplay; encrypted-media"
+                                                                        allowFullScreen
+                                                                        style={{ borderRadius: "12px" }}
+                                                                    />
+
+                                                                    <div className="text-end mt-2">
+                                                                        <button
+                                                                            className="thm-btn"
+                                                                            onClick={() => {
+                                                                                if (currentLesson?._id) {
+                                                                                    markLessonCompleted(currentLesson._id);
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            Mark as Completed
+                                                                        </button>
+                                                                    </div>
+                                                                </>
                                                             ) : (
                                                                 <video
                                                                     width="100%"
@@ -593,7 +676,7 @@ setReviews(prev=>[data.data,...prev])
                                                                         src={
                                                                             lessonVideo.startsWith("http")
                                                                                 ? lessonVideo
-                                                                                : `https://udemy-latest-backend-1.onrender.com${lessonVideo}`
+                                                                                : `${import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'https://udemy-latest-backend-1.onrender.com'}${lessonVideo}`
                                                                         }
                                                                         type="video/mp4"
                                                                     />
@@ -932,7 +1015,15 @@ setReviews(prev=>[data.data,...prev])
                                                                                 </span>
 
                                                                                 <div className="download-notes-box accordion-actions">
-                                                                                    <button className="udemy-down-btn">Download Notes</button>
+                                                                                    <button
+                                                                                        className="udemy-down-btn"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            e.nativeEvent.stopImmediatePropagation();
+                                                                                        }}
+                                                                                    >
+                                                                                        Download Notes
+                                                                                    </button>
                                                                                 </div>
 
                                                                             </div>
@@ -1014,7 +1105,7 @@ setReviews(prev=>[data.data,...prev])
 
                                                                                                                     e.preventDefault();
 
-                                                                                                                    const lId = lesson?._id;
+                                                                                                                    const lId = String(lesson?._id);
 
                                                                                                                     if (!completedLessons.has(lId)) {
                                                                                                                         alert("Please first complete the video to unlock the quiz.");
@@ -1317,13 +1408,13 @@ setReviews(prev=>[data.data,...prev])
                                         </div>
 
                                         <div className="mt-4 text-center">
-                                          <button
-className="thm-btn px-5"
-onClick={submitReview}
-data-bs-dismiss="modal"
->
-Submit
-</button>
+                                            <button
+                                                className="thm-btn px-5"
+                                                onClick={submitReview}
+                                                data-bs-dismiss="modal"
+                                            >
+                                                Submit
+                                            </button>
                                         </div>
                                     </form>
                                 </div>

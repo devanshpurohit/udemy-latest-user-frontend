@@ -27,7 +27,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
     const [isReview, setIsReview] = useState(false);
     const [showVideo, setShowVideo] = useState(false);
     const location = useLocation();
-    const [course, setCourse] = useState(location.state?.course || null);
+   const [course, setCourse] = useState(null);
     const [loading, setLoading] = useState(true);
     const [currentLesson, setCurrentLesson] = useState(null);
     const [currentQuiz, setCurrentQuiz] = useState(null);
@@ -36,7 +36,8 @@ function CourseDetailsContentSecond({ course: propCourse }) {
     const [wishlistLoading, setWishlistLoading] = useState(false);
     const itemsPerPage = 6;
     const navigate = useNavigate();
-    
+
+
     // 🎯 Reviews State
     const [reviews, setReviews] = useState([]);
     const [reviewsLoading, setReviewsLoading] = useState(false);
@@ -60,6 +61,13 @@ function CourseDetailsContentSecond({ course: propCourse }) {
     const [isPurchased, setIsPurchased] = useState(false);
     // default to true so redirect guard doesn't run before we start checking
     const [isCheckingPurchase, setIsCheckingPurchase] = useState(true);
+
+    const openLoginModal = () => {
+        const modal = new window.bootstrap.Modal(
+            document.getElementById("loginModal")
+        );
+        modal.show();
+    };
 
     // ❌ Remove automatic redirect - let user click manually
     // useEffect(() => {
@@ -153,11 +161,10 @@ function CourseDetailsContentSecond({ course: propCourse }) {
     // Extract video ID from YouTube URL
     const extractVideoId = (url) => {
         if (!url) return null;
-        const regex = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/;
-        const match = url.match(regex);
-        return match ? match[1] : null;
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
+        const match = url.match(regExp);
+        return (match && match[2].length === 11) ? match[2] : null;
     };
-
     // Toggle section expansion
     const toggleSection = (sectionId) => {
         setExpandedSections(prev => ({
@@ -215,38 +222,37 @@ function CourseDetailsContentSecond({ course: propCourse }) {
     };
 
     // 🎯 Add to Cart Function
-    const addToCart = () => {
-        if (!course) return;
+   const addToCart = () => {
+    if (!course) return;
 
-        // Get existing cart from localStorage
-        const existingCart = JSON.parse(localStorage.getItem('cart') || '[]');
+    const existingCart = JSON.parse(localStorage.getItem('cart') || '[]');
 
-        // Check if course is already in cart
-        const isAlreadyInCart = existingCart.some(item => item._id === course._id);
+    const isAlreadyInCart = existingCart.some(item => item._id === course._id);
 
-        if (isAlreadyInCart) {
-            navigate('/add-cart');
-            return;
-        }
-
-        // Create course object for cart
-        const courseForCart = {
-            _id: course._id,
-            title: course.title,
-            price: course.discountedPrice || course.price,
-            thumbnail: course.thumbnail || course.courseImage,
-            instructor: course.instructor || 'Instructor',
-            duration: getTotalDuration(),
-            lessons: getTotalLessons(),
-            addedAt: new Date().toISOString()
-        };
-
-        // Save to localStorage
-        localStorage.setItem('cart', JSON.stringify([...existingCart, courseForCart]));
-
-        // Navigate to cart page
+    if (isAlreadyInCart) {
         navigate('/add-cart');
+        return;
+    }
+
+    const courseForCart = {
+        _id: course._id,
+        title: course.title,
+        price: course.discountedPrice || course.price,
+        thumbnail: course.thumbnail || course.courseImage,
+        instructor: course.instructor || 'Instructor',
+        duration: getTotalDuration(),
+        lessons: getTotalLessons(),
+        addedAt: new Date().toISOString()
     };
+
+    const updatedCart = [...existingCart, courseForCart];
+
+    localStorage.setItem('cart', JSON.stringify(updatedCart));
+
+    window.dispatchEvent(new Event("cartUpdated")); // ⭐ important
+
+    navigate('/add-cart');
+};
     const addToWishlist = async () => {
         try {
             setWishlistLoading(true);
@@ -337,7 +343,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                 setReviewsLoading(true);
 
                 const res = await fetch(
-                    `${getBackendBaseUrl()}/api/reviews/${course._id}` 
+                    `${getBackendBaseUrl()}/api/reviews/${course._id}`
                 );
 
                 const data = await res.json();
@@ -381,29 +387,31 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                 console.log("🔍 Fetching course id:", id);
 
                 // ⚡ Check cache first
-                const cacheKey = `course_${id}`;
-                const cachedCourse = sessionStorage.getItem(cacheKey);
-                if (cachedCourse) {
-                    const parsedCourse = JSON.parse(cachedCourse);
-                    console.log("✅ Course loaded from cache:", parsedCourse.title);
-                    setCourse(parsedCourse);
+                // const cacheKey = `course_${id}`;
+                // const cachedCourse = sessionStorage.getItem(cacheKey);
+                // if (cachedCourse) {
+                //     const parsedCourse = JSON.parse(cachedCourse);
+                //     console.log("✅ Course loaded from cache:", parsedCourse.title);
+                //     setCourse(parsedCourse);
 
-                    // Auto-select first lesson for learning mode
-                    if (parsedCourse.sections?.length > 0) {
-                        const firstLesson = parsedCourse.sections[0].lessons?.[0];
-                        if (firstLesson) {
-                            setCurrentLesson(firstLesson);
-                            setShowVideo(true);
-                        }
-                    }
-                    setLoading(false);
-                    return;
-                }
+                //     // Auto-select first lesson for learning mode
+                //     if (parsedCourse.sections?.length > 0) {
+                //         const firstLesson = parsedCourse.sections[0].lessons?.[0];
+                //         if (firstLesson) {
+                //             setCurrentLesson(firstLesson);
+                //             setShowVideo(true);
+                //         }
+                //     }
+                //     setLoading(false);
+                //     return;
+                // }
 
                 const backendUrl = getBackendBaseUrl();
                 console.log("🔍 API URL:", `${backendUrl}/api/public/courses/${id}`);
 
-                const res = await fetch(`${backendUrl}/api/public/courses/${id}`);
+                const res = await fetch(`${backendUrl}/api/public/courses/${id}`, {
+    cache: "no-store"
+});
                 console.log("🔍 Response status:", res.status);
 
                 const data = await res.json();
@@ -412,7 +420,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                 if (data.success) {
                     setCourse(data.data);
                     // ⚡ Cache the course data
-                    sessionStorage.setItem(cacheKey, JSON.stringify(data.data));
+                 
                     console.log("✅ Course loaded successfully:", data.data.title);
 
                     // Auto-select first lesson for learning mode
@@ -441,7 +449,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                 console.log("🔍 Using fallback data for course:", id);
                                 setCourse(foundCourse);
                                 // ⚡ Cache fallback data too
-                                sessionStorage.setItem(cacheKey, JSON.stringify(foundCourse));
+                              
                                 console.log("✅ Course loaded via fallback:", foundCourse.title);
                             } else {
                                 console.log("❌ Requested course not found in list");
@@ -505,7 +513,29 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                             <div className="d-flex align-items-center justify-content-center">
                                 <div>
                                     <h3 className="lg_title text-center mb-2">Course Details</h3>
-                                    <p className="text-center text-muted">Course information and enrollment</p>
+                                   <div className="admin-breadcrumb mt-2">
+  <nav aria-label="breadcrumb">
+    <ol className="breadcrumb custom-breadcrumb justify-content-center">
+
+      <li className="breadcrumb-item">
+        <NavLink to="/" className="breadcrumb-link">
+          Home
+        </NavLink>
+      </li>
+
+      <li className="breadcrumb-item">
+        <NavLink to="/courses" className="breadcrumb-link">
+          Course
+        </NavLink>
+      </li>
+
+      <li className="breadcrumb-item active" aria-current="page">
+        Details
+      </li>
+
+    </ol>
+  </nav>
+</div>
                                 </div>
                             </div>
                         </div>
@@ -580,15 +610,16 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                 {showVideo && currentLesson?.videoUrl && (
                                                     <>
                                                         {isYouTube(currentLesson.videoUrl) ? (
-                                                            <iframe
-                                                                width="100%"
-                                                                height="400"
-                                                                src={`https://www.youtube.com/embed/${extractVideoId(currentLesson.videoUrl)}`}
-                                                                title="Course Video"
-                                                                frameBorder="0"
-                                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                                                allowFullScreen
-                                                            ></iframe>
+                                                           <iframe
+    width="100%"
+    height="400"
+    src={`https://www.youtube.com/embed/${extractVideoId(currentLesson.videoUrl)}?rel=0`}
+    title="Course Video"
+    frameBorder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowFullScreen
+/>
+
                                                         ) : (
                                                             <video
                                                                 controls
@@ -598,7 +629,16 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                                     borderRadius: "12px"
                                                                 }}
                                                             >
-                                                                <source src={currentLesson.videoUrl} type="video/mp4" />
+                                                                <source 
+                                                                    src={currentLesson.videoUrl.startsWith('http') 
+                                                                        ? currentLesson.videoUrl 
+                                                                        : currentLesson.videoUrl.startsWith('/uploads')
+                                                                            ? currentLesson.videoUrl
+                                                                            : currentLesson.videoUrl.includes('uploads/')
+                                                                                ? currentLesson.videoUrl
+                                                                                : `/uploads/${currentLesson.videoUrl}`} 
+                                                                    type="video/mp4" 
+                                                                />
                                                             </video>
                                                         )}
                                                     </>
@@ -616,10 +656,35 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                             </div>
                                         )}
 
-                                        <div className="udemy-content-video">
-                                            <h5>{course?.title || "Course Title"}</h5>
-                                            <p>Posted {course?.createdAt ? new Date(course.createdAt).toLocaleDateString() : ""}</p>
-                                        </div>
+                                       <div className="udemy-content-video">
+
+    <div className="d-flex justify-content-between align-items-center">
+
+        <h5 className="mb-0">
+            {course?.title || "Course Title"}
+        </h5>
+
+        <button
+            className="thm-btn outline btn-sm"
+            onClick={() => {
+                if (!isLoggedIn) {
+                    openLoginModal();
+                    return;
+                }
+                addToWishlist();
+            }}
+            disabled={wishlistLoading}
+        >
+            {wishlistLoading ? "Adding..." : "Add to Wishlist"}
+        </button>
+
+    </div>
+
+    <p className="mt-1">
+        Posted {course?.createdAt ? new Date(course.createdAt).toLocaleDateString() : ""}
+    </p>
+
+</div>
                                     </div>
 
                                     {/* Course Tabs */}
@@ -914,26 +979,26 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                                                                     <a
                                                                                                         href="#"
                                                                                                         className="quiz-title"
-                                                                                                       onClick={(e) => {
+                                                                                                        onClick={(e) => {
 
-e.preventDefault();
+                                                                                                            e.preventDefault();
 
-if (!isPurchased) return;
+                                                                                                            if (!isPurchased) return;
 
-// ❌ quiz only allowed in learning page
-if (!isLearnMode) {
-navigate(`/course/${course._id}/learn`);
-return;
-}
+                                                                                                            // ❌ quiz only allowed in learning page
+                                                                                                            if (!isLearnMode) {
+                                                                                                                navigate(`/course/${course._id}/learn`);
+                                                                                                                return;
+                                                                                                            }
 
-const cId = course?._id || course?.id;
-const lId = lesson?._id || lesson?.id;
-const qId = quiz?._id || quiz?.id;
+                                                                                                            const cId = course?._id || course?.id;
+                                                                                                            const lId = lesson?._id || lesson?.id;
+                                                                                                            const qId = quiz?._id || quiz?.id;
 
-if (!cId || !lId || !qId) return;
+                                                                                                            if (!cId || !lId || !qId) return;
 
-navigate(`/course/${cId}/lesson/${lId}/quiz/${qId}`);
-}}
+                                                                                                            navigate(`/course/${cId}/lesson/${lId}/quiz/${qId}`);
+                                                                                                        }}
                                                                                                     >
                                                                                                         <MdQuiz className="file-icon me-2" />
                                                                                                         Quiz {quizIndex + 1} : {quiz.title || "Quiz"}
@@ -1189,7 +1254,7 @@ navigate(`/course/${cId}/lesson/${lId}/quiz/${qId}`);
                                                                         <h6>{review.user?.country || "India"}</h6>
 
                                                                         <ul className="rating-list">
-                                                                            {[1,2,3,4,5].map((star) => (
+                                                                            {[1, 2, 3, 4, 5].map((star) => (
                                                                                 <li key={star} className="rating-item">
                                                                                     {star <= review.rating ? (
                                                                                         <IoIosStar />
@@ -1284,19 +1349,40 @@ navigate(`/course/${cId}/lesson/${lId}/quiz/${qId}`);
                                                 <div className="purchase-box">
                                                     <button
                                                         className="thm-btn w-100 btn-lg btn-success fw-bold py-3 px-5"
-                                                        onClick={() => navigate(`/buy/${course._id}`)}
+                                                        onClick={() => {
+                                                            if (!isLoggedIn) {
+                                                                openLoginModal();
+                                                                return;
+                                                            }
+                                                            navigate(`/buy/${course._id}`);
+                                                        }}
                                                     >
                                                         Buy Now
                                                     </button>
 
                                                     <div className="d-flex align-items gap-3 mt-3">
-                                                        <button className="thm-btn w-100 outline" onClick={addToCart}>
+                                                        <button
+                                                            className="thm-btn w-100 outline"
+                                                            onClick={() => {
+                                                                if (!isLoggedIn) {
+                                                                    openLoginModal();
+                                                                    return;
+                                                                }
+                                                                addToCart();
+                                                            }}
+                                                        >
                                                             Add to Cart
                                                         </button>
 
                                                         <button
                                                             className="thm-btn w-100 outline"
-                                                            onClick={addToWishlist}
+                                                            onClick={() => {
+                                                                if (!isLoggedIn) {
+                                                                    openLoginModal();
+                                                                    return;
+                                                                }
+                                                                addToWishlist();
+                                                            }}
                                                             disabled={wishlistLoading}
                                                         >
                                                             {wishlistLoading ? "Adding..." : "Add to Wishlist"}

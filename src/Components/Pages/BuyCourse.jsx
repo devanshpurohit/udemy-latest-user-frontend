@@ -19,11 +19,15 @@ function BuyCourse() {
     const [purchasing, setPurchasing] = useState(false);
     const location = useLocation();
 const cartCourseIds = location.state?.courseIds || [];
+
 const finalCourseIds = courseId ? [courseId] : cartCourseIds;
     const backendBaseUrl = useMemo(() => {
         // config.API_BASE_URL is usually like ".../api"
         return String(config.API_BASE_URL || "").replace(/\/api\/?$/, "");
     }, []);
+    const removeCourse = (id) => {
+  setCourses(prev => prev.filter(course => course._id !== id));
+};
     const getCourseImageUrl = (course) => {
   const raw =
     course?.thumbnail ||
@@ -154,13 +158,19 @@ const total = subTotal + gst;
                 firstCourse?.sections?.[0]?.lessons?.[0] ||
                 firstCourse?.lessons?.[0];
 
-            navigate(`/course/${finalCourseIds[0]}/learn`, {
-                state: {
-                    lessonId: firstLesson?._id,
-                    videoUrl: firstLesson?.videoUrl,
-                    courses: courses
-                }
-            });
+
+              document.querySelectorAll(".modal-backdrop").forEach(el => el.remove());
+document.body.classList.remove("modal-open");
+document.body.style.overflow = "auto";
+
+
+navigate(`/course/${finalCourseIds[0]}/learn`, {
+    state: {
+        lessonId: firstLesson?._id,
+        videoUrl: firstLesson?.videoUrl,
+        courses: courses
+    }
+});
 
         } else {
 
@@ -491,9 +501,29 @@ const total = subTotal + gst;
                                 </div>
 
                                 <div className="summary-content-card summary-header pb-3">
-                                {courses.map((course) => (
-  <div key={course._id} className="summary-content-card summary-header pb-3">
+                              {courses.map((course) => (
+  <div
+    key={course._id}
+    className="summary-content-card summary-header pb-3"
+    style={{ position: "relative" }}
+  >
 
+    <button
+      onClick={() => removeCourse(course._id)}
+      style={{
+        position: "absolute",
+        top: "5px",
+        right: "5px",
+        border: "none",
+        background: "white",
+        borderRadius: "50%",
+        width: "25px",
+        height: "25px",
+        cursor: "pointer"
+      }}
+    >
+      <FontAwesomeIcon icon={faClose} />
+    </button>
     <div className="summary-banner-box">
       <img src={getCourseImageUrl(course)} alt={course.title} />
     </div>
