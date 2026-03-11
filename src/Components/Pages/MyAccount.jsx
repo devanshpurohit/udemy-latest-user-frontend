@@ -59,11 +59,11 @@ function MyAccount() {
                 console.log('MyAccount - Set profile image from auth user:', imageUrl);
             } else {
                 console.log('MyAccount - No profile image found in auth user, setting default');
-                setProfileImage("/avtar.png");
+                setProfileImage(null);
             }
         } else {
             console.log('MyAccount - No auth user found, setting default image');
-            setProfileImage("/avtar.png");
+            setProfileImage(null);
         }
     }, [authUser]);
 

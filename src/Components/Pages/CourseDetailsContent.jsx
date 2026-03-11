@@ -4,6 +4,7 @@ import config from "../../config/config";
 import { getToken } from "../../services/authService";
 import { useAuth } from "../../contexts/AuthContext";
 import { FaPlay } from "react-icons/fa";
+import { toast } from "react-toastify";
 
 import { MdWork } from "react-icons/md";
 import { FaClock } from "react-icons/fa6";
@@ -88,7 +89,8 @@ function CourseDetailsContent({ course: propCourse }) {
         setCurrentLesson(null);
         setShowVideo(false);
     };
-    const submitReview = async () => {
+    const submitReview = async (e) => {
+        if(e) e.preventDefault();
 
         const token = localStorage.getItem("token")
 
@@ -112,7 +114,7 @@ function CourseDetailsContent({ course: propCourse }) {
 
         if (data.success) {
 
-            alert("Review submitted")
+            toast.success("Review submitted")
 
             setReviewText("")
             setRating(5)
@@ -414,7 +416,7 @@ function CourseDetailsContent({ course: propCourse }) {
         const modalElement = document.getElementById("review-Add");
 
         if (modalElement && window.bootstrap) {
-            const modal = new window.bootstrap.Modal(modalElement);
+            const modal = window.bootstrap.Modal.getInstance(modalElement) || new window.bootstrap.Modal(modalElement);
             modal.show();
         }
     };
@@ -466,6 +468,10 @@ function CourseDetailsContent({ course: propCourse }) {
 
     // Handle lesson click with progress tracking
     const handleLessonClick = (lesson) => {
+        if (!isPurchased && user?.role !== 'admin') {
+            toast.info("first buy the course to access video");
+            return;
+        }
         setCurrentLesson(lesson);
         setCurrentQuiz(null);
         setShowVideo(true);
@@ -483,7 +489,7 @@ function CourseDetailsContent({ course: propCourse }) {
             const token = getToken();
 
             if (!token) {
-                alert('Please login to add courses to wishlist');
+                toast.error('Please login to add courses to wishlist');
                 return;
             }
 
@@ -498,13 +504,13 @@ function CourseDetailsContent({ course: propCourse }) {
             const data = await response.json();
 
             if (data.success) {
-                alert('Course added to wishlist successfully!');
+                toast.success('Course added to wishlist successfully!');
             } else {
-                alert(data.message || 'Failed to add to wishlist');
+                toast.error(data.message || 'Failed to add to wishlist');
             }
         } catch (error) {
             console.error('Add to wishlist error:', error);
-            alert('Failed to add to wishlist');
+            toast.error('Failed to add to wishlist');
         } finally {
             setWishlistLoading(false);
         }
@@ -566,7 +572,13 @@ function CourseDetailsContent({ course: propCourse }) {
                                         {!showVideo ? (
                                             <div
                                                 className="thumbnail-container"
-                                                onClick={() => setShowVideo(true)}
+                                                onClick={() => {
+                                                    if (!isPurchased && user?.role !== 'admin') {
+                                                        toast.info("first buy the course to access video");
+                                                        return;
+                                                    }
+                                                    setShowVideo(true);
+                                                }}
                                                 style={{
                                                     position: "relative",
                                                     cursor: "pointer"
@@ -785,51 +797,31 @@ function CourseDetailsContent({ course: propCourse }) {
                                                     </p>
                                                 </div>
 
-                                                <div className="udemy-description">
-                                                    <h6 className="first_para">What I Will Learn</h6>
-                                                    <ul className="ud-description-list">
-                                                        <li className="ud-item">
-                                                            Have the skills to start making money on the side,
-                                                            as a casual freelancer, or full time as a
-                                                            work-from-home freelancer
-                                                        </li>
-                                                        <li className="ud-item">
-                                                            Easily create a beautiful HTML & CSS website with
-                                                            Bootstrap (that doesn't look like generic
-                                                            Bootstrap websites!)
-                                                        </li>
-                                                        <li className="ud-item">
-                                                            Convert any static HTML & CSS website into a
-                                                            Custom WordPress Theme
-                                                        </li>
-                                                        <li className="ud-item">
-                                                            Have a thorough understanding of utilizing PHP to
-                                                            create WordPress websites & themes
-                                                        </li>
-                                                    </ul>
-                                                </div>
+                                                {course?.whatYouWillLearn?.length > 0 && (
+                                                    <div className="udemy-description">
+                                                        <h6 className="first_para">What I Will Learn</h6>
+                                                        <ul className="ud-description-list">
+                                                            {course.whatYouWillLearn.map((item, index) => (
+                                                                <li key={index} className="ud-item pb-2">
+                                                                    {item}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
 
-                                                <div className="udemy-description">
-                                                    <h6 className="first_para">Requirements</h6>
-                                                    <ul className="ud-description-list">
-                                                        <li className="ud-item pb-0">
-                                                            Have a basic understanding of HTML, CSS and PHP
-                                                            (all courses I offer)
-                                                        </li>
-                                                        <li className="ud-item pb-0">
-                                                            Proficiency in tools like Premiere Pro / After
-                                                            Effects / Final Cut Pro
-                                                        </li>
-                                                        <li className="ud-item pb-0">
-                                                            Strong sense of timing, storytelling, and visual
-                                                            flow
-                                                        </li>
-                                                        <li className="ud-item pb-0">
-                                                            Ability to meet deadlines and follow creative
-                                                            briefs
-                                                        </li>
-                                                    </ul>
-                                                </div>
+                                                {course?.requirements?.length > 0 && (
+                                                    <div className="udemy-description">
+                                                        <h6 className="first_para">Requirements</h6>
+                                                        <ul className="ud-description-list">
+                                                            {course.requirements.map((item, index) => (
+                                                                <li key={index} className="ud-item pb-2">
+                                                                    {item}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
 
                                                 <div className="payment-tp-border"></div>
 
@@ -842,7 +834,7 @@ function CourseDetailsContent({ course: propCourse }) {
                                                             </span>
                                                             <div className="bid-about-content">
                                                                 <p> Course Level</p>
-                                                                <h6>{course.level || 'Expert'}</h6>
+                                                                <h6 style={{ textTransform: 'capitalize' }}>{course?.level || 'Beginner'}</h6>
                                                             </div>
                                                         </div>
                                                         <div className="bid-grid-box">
@@ -860,7 +852,7 @@ function CourseDetailsContent({ course: propCourse }) {
                                                             </span>
                                                             <div className="bid-about-content">
                                                                 <p>Language</p>
-                                                                <h6>{course.language || 'English'}</h6>
+                                                                <h6>{course?.language || 'English'}</h6>
                                                             </div>
                                                         </div>
                                                         <div className="bid-grid-box">
@@ -995,7 +987,7 @@ function CourseDetailsContent({ course: propCourse }) {
                                                             course.sections.map((section, sectionIndex) => (
                                                                 <div className="accordion-item" key={section._id || sectionIndex}>
 
-                                                                    <h2 className="accordion-header" id={`heading${sectionIndex}`}>
+                                                                    <h2 className="accordion-header position-relative" id={`heading${sectionIndex}`}>
                                                                         <button
                                                                             className="accordion-button"
                                                                             type="button"
@@ -1004,31 +996,32 @@ function CourseDetailsContent({ course: propCourse }) {
                                                                             aria-expanded={sectionIndex === 0}
                                                                             aria-controls={`collapse${sectionIndex}`}
                                                                         >
-                                                                            <div className="accordion-title w-100 d-flex justify-content-between align-items-center">
-
+                                                                            <div className="accordion-title w-100 d-flex justify-content-between align-items-center pe-5">
                                                                                 <span>
                                                                                     {sectionIndex + 1}. {section.title || `Section ${sectionIndex + 1}`}
-
                                                                                     <a href="#" className="preview-btn ms-2">
                                                                                         <FontAwesomeIcon icon={faLock} />
                                                                                     </a>
                                                                                 </span>
-
-                                                                                <div className="download-notes-box accordion-actions">
-                                                                                    <button
-                                                                                        className="udemy-down-btn"
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            e.nativeEvent.stopImmediatePropagation();
-                                                                                        }}
-                                                                                    >
-                                                                                        Download Notes
-                                                                                    </button>
-                                                                                </div>
-
                                                                             </div>
-
                                                                         </button>
+                                                                        {/* Download button moved OUTSIDE the accordion-button to fix click bubbling */}
+                                                                        <div className="download-notes-box position-absolute" style={{ right: '60px', top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}>
+                                                                            <button
+                                                                                className="udemy-down-btn"
+                                                                                onClick={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    e.stopPropagation();
+                                                                                    if (e.nativeEvent) {
+                                                                                        e.nativeEvent.stopImmediatePropagation();
+                                                                                    }
+                                                                                    // Handle download logic here
+                                                                                    console.log("Download clicked");
+                                                                                }}
+                                                                            >
+                                                                                Download Notes
+                                                                            </button>
+                                                                        </div>
                                                                     </h2>
 
                                                                     <div
@@ -1051,6 +1044,10 @@ function CourseDetailsContent({ course: propCourse }) {
                                                                                                     href="#"
                                                                                                     className="quiz-title"
                                                                                                     onClick={() => {
+                                                                                                        if (!isPurchased && user?.role !== 'admin') {
+                                                                                                            toast.info("first buy the course to access video");
+                                                                                                            return;
+                                                                                                        }
                                                                                                         setCurrentLesson(lesson);
                                                                                                         setCurrentVideo(lesson.videoUrl);
                                                                                                         setShowVideo(true);
@@ -1088,7 +1085,7 @@ function CourseDetailsContent({ course: propCourse }) {
                                                                                         </div>
 
                                                                                         {lesson.quizzes && lesson.quizzes.length > 0 && (
-                                                                                            <div className="ms-4 mt-2">
+                                                                                            <div className=" mt-2">
 
                                                                                                 {lesson.quizzes.map((quiz, quizIndex) => (
 
@@ -1108,7 +1105,7 @@ function CourseDetailsContent({ course: propCourse }) {
                                                                                                                     const lId = String(lesson?._id);
 
                                                                                                                     if (!completedLessons.has(lId)) {
-                                                                                                                        alert("Please first complete the video to unlock the quiz.");
+                                                                                                                        toast.warning("Please first complete the video to unlock the quiz.");
                                                                                                                         return;
                                                                                                                     }
 
@@ -1328,7 +1325,10 @@ function CourseDetailsContent({ course: propCourse }) {
                                                 position: 'relative'
                                             }}
                                             onClick={() => {
-
+                                                if (!isPurchased && user?.role !== 'admin') {
+                                                    toast.info("first buy the course to access video");
+                                                    return;
+                                                }
                                                 const firstLesson = getFirstLesson();
 
                                                 if (!firstLesson) return;
@@ -1409,6 +1409,7 @@ function CourseDetailsContent({ course: propCourse }) {
 
                                         <div className="mt-4 text-center">
                                             <button
+                                                type="button"
                                                 className="thm-btn px-5"
                                                 onClick={submitReview}
                                                 data-bs-dismiss="modal"

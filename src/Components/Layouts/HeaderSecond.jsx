@@ -8,7 +8,7 @@ import { IoInformationCircle } from "react-icons/io5";
 import { FaCartShopping } from "react-icons/fa6";
 import { IoBook } from "react-icons/io5";
 import { FiLogOut } from "react-icons/fi";
-import { isLoggedIn, getStoredUser, logout } from "../../services/authService";
+import { isLoggedIn, getStoredUser, logout, login as authLogin, forgotPassword as authForgotPassword, verifyOtp as authVerifyOtp, resetPassword as authResetPassword } from "../../services/authService";
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocation } from "react-router-dom";
 
@@ -23,6 +23,111 @@ const HeaderSecond = () => {
     const { logout: authLogout, user: authUser, isAuthenticated } = useAuth();
     const location = useLocation();
 
+    // Forgot Password State
+    const [forgotEmail, setForgotEmail] = useState('');
+    const [forgotOTP, setForgotOTP] = useState(['', '', '', '']);
+    const [forgotNewPassword, setForgotNewPassword] = useState('');
+    const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+    const [forgotLoading, setForgotLoading] = useState(false);
+    const [forgotError, setForgotError] = useState('');
+
+    const handleForgotPassword = async (e) => {
+        e.preventDefault();
+        setForgotError('');
+        setForgotLoading(true);
+        try {
+            const result = await authForgotPassword(forgotEmail);
+            if(result.success) {
+                const forgotModal = window.bootstrap?.Modal?.getInstance(document.getElementById('htmlForgotPasswordModal'));
+                if(forgotModal) forgotModal.hide();
+                const otpModal = new window.bootstrap.Modal(document.getElementById('otpEmailModal'));
+                otpModal.show();
+            } else {
+                setForgotError(result.error);
+            }
+        } catch (err) {
+            setForgotError('Request failed');
+        } finally {
+            setForgotLoading(false);
+        }
+    };
+
+    const handleVerifyOtp = async (e) => {
+        e.preventDefault();
+        setForgotError('');
+        setForgotLoading(true);
+        const otpString = forgotOTP.join('');
+        if (otpString.length !== 4) {
+            setForgotError('Please enter a valid 4-digit OTP');
+            setForgotLoading(false);
+            return;
+        }
+        try {
+            const result = await authVerifyOtp(forgotEmail, otpString);
+            if(result.success) {
+                const otpModalEl = document.getElementById('otpEmailModal');
+                const otpModal = window.bootstrap?.Modal?.getInstance(otpModalEl);
+                if(otpModal) otpModal.hide();
+                const setPasswordModal = new window.bootstrap.Modal(document.getElementById('NewPasswordModal'));
+                setPasswordModal.show();
+            } else {
+                setForgotError(result.error);
+            }
+        } catch (err) {
+            setForgotError('Verification failed');
+        } finally {
+            setForgotLoading(false);
+        }
+    };
+
+    const handleOtpChange = (element, index) => {
+        if (isNaN(element.value)) return;
+        const newOtp = [...forgotOTP];
+        newOtp[index] = element.value.substring(0, 1);
+        setForgotOTP(newOtp);
+        // Focus next input
+        if (element.nextSibling && element.value) {
+            element.nextSibling.focus();
+        }
+    };
+    
+    const handleOtpKeyDown = (e, index) => {
+        if (e.key === 'Backspace') {
+            if (!forgotOTP[index] && e.target.previousSibling) {
+                e.target.previousSibling.focus();
+            }
+        }
+    };
+
+    const handleResetPassword = async (e) => {
+        e.preventDefault();
+        setForgotError('');
+        if(forgotNewPassword !== forgotConfirmPassword) {
+            setForgotError("Passwords do not match");
+            return;
+        }
+        setForgotLoading(true);
+        try {
+            const result = await authResetPassword(forgotEmail, forgotNewPassword);
+            if(result.success) {
+                const setPasswordModalEl = document.getElementById('NewPasswordModal');
+                const setPasswordModal = window.bootstrap?.Modal?.getInstance(setPasswordModalEl);
+                if(setPasswordModal) setPasswordModal.hide();
+                const loginModal = new window.bootstrap.Modal(document.getElementById('loginModal'));
+                loginModal.show();
+                setForgotEmail('');
+                setForgotOTP(['', '', '', '']);
+                setForgotNewPassword('');
+                setForgotConfirmPassword('');
+            } else {
+                setForgotError(result.error);
+            }
+        } catch (err) {
+            setForgotError('Reset failed');
+        } finally {
+            setForgotLoading(false);
+        }
+    };
     useEffect(() => {
         setUserDropdownOpen(false);
     }, [location]);
@@ -426,16 +531,21 @@ useEffect(() => {
                                                 }}
                                             >
                                                 <div className="admn-icon me-2">
-                                                    <img
-                                                        src={
-                                                            user?.profile?.profileImage
-                                                                ? user.profile.profileImage.startsWith("data:")
+                                                    {user?.profile?.profileImage ? (
+                                                        <img
+                                                            src={
+                                                                user.profile.profileImage.startsWith("data:")
                                                                     ? user.profile.profileImage
                                                                     : `${user.profile.profileImage}?t=${Date.now()}`
-                                                                : "/user_01.jpg"
-                                                        }
-                                                    />
+                                                            }
+                                                        />
+                                                    ) : (
+                                                        <div className="generic-user-icon">
+                                                            <FontAwesomeIcon icon={faUser} />
+                                                        </div>
+                                                    )}
                                                 </div>
+
                                                 <div className="profile-info me-1">
                                                     <h4 className="profile-name">Welcome</h4>
                                                     <p className="profile-id">{getUserDisplayName()}</p>
@@ -771,50 +881,32 @@ useEffect(() => {
 
 
 
-                                            <form action="">
-
+                                            <form onSubmit={handleForgotPassword}>
+                                                {forgotError && <div className="alert alert-danger">{forgotError}</div>}
                                                 <div className="custom-frm-bx">
-
                                                     <input
-
                                                         type="email"
-
                                                         className="form-control profile-control pe-5"
-
                                                         placeholder="Enter Email Id"
-
+                                                        required
+                                                        value={forgotEmail}
+                                                        onChange={(e) => setForgotEmail(e.target.value)}
                                                     />
-
                                                     <div className="pass-toggle-box">
-
                                                         <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faEnvelope} />
-
                                                         </button>
-
                                                     </div>
-
                                                 </div>
-
                                                 <div className="my-4">
-
                                                     <div>
-
-                                                        <button type="button" className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#otpEmailModal" >Continue</button>
-
+                                                        <button type="submit" className="nw-thm-btn w-100" disabled={forgotLoading}>
+                                                            {forgotLoading ? 'Loading...' : 'Continue'}
+                                                        </button>
                                                         <div className="my-3 text-center">
-
-                                                            <a href="#" className="card-back-btn" data-bs-toggle="modal" data-bs-target="#loginModal">Back</a>
-
+                                                            <a href="#" className="card-back-btn" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#loginModal">Back</a>
                                                         </div>
-
                                                     </div>
-
                                                 </div>
-
-
-
-
-
                                             </form>
 
                                         </div>
@@ -1815,60 +1907,45 @@ useEffect(() => {
 
 
 
-                                            <form action="">
-
+                                            <form onSubmit={handleVerifyOtp}>
                                                 <div className='row'>
-
+                                                    {forgotError && <div className="alert alert-danger">{forgotError}</div>}
                                                     <div className="col-lg-12">
-
                                                         <div className="otp-wrapper custom-frm-bx">
-
-                                                            <input type="number" className="otp-input" />
-
-                                                            <input type="number" className="otp-input" />
-
-                                                            <input type="number" className="otp-input" />
-
-                                                            <input type="number" className="otp-input" />
-
+                                                            {forgotOTP.map((data, index) => {
+                                                                return (
+                                                                    <input
+                                                                        className="otp-input"
+                                                                        type="text"
+                                                                        name="otp"
+                                                                        maxLength="1"
+                                                                        key={index}
+                                                                        value={data}
+                                                                        onChange={e => handleOtpChange(e.target, index)}
+                                                                        onFocus={e => e.target.select()}
+                                                                        onKeyDown={e => handleOtpKeyDown(e, index)}
+                                                                    />
+                                                                );
+                                                            })}
                                                         </div>
-
                                                     </div>
 
-
-
-                                                    <div className="mt-3">
-
+                                                    <div className="mt-4">
                                                         <div>
-
-                                                            <button type="button" className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#NewPasswordModal">Continue</button>
-
+                                                            <button type="submit" className="nw-thm-btn w-100" disabled={forgotLoading}>
+                                                                {forgotLoading ? 'Verifying...' : 'Continue'}
+                                                            </button>
                                                         </div>
 
-
-
-                                                        <div className="my-2 text-center">
-
-                                                            <a href="#" className="card-back-btn" data-bs-toggle="modal" data-bs-target="#htmlForgotPasswordModal">Back</a>
-
+                                                        <div className="my-3 text-center">
+                                                            <a href="#" className="card-back-btn" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#htmlForgotPasswordModal" >Back</a>
                                                         </div>
-
                                                     </div>
-
-
 
                                                     <div className="udemy-tp-line border-top-0">
-
-
-
-                                                        <p>Didn't receive the code? <a href="#" className="udemy-back-login">Resend</a> <span className="resend-title">in 30s</span> </p>
-
+                                                        <p>Didn't receive the code? <button type="button" onClick={handleForgotPassword} className="udemy-back-login border-0 bg-transparent">Resend</button> </p>
                                                     </div>
-
-
-
                                                 </div>
-
                                             </form>
 
                                         </div>
@@ -1953,72 +2030,42 @@ useEffect(() => {
 
 
 
-                                            <form action="">
-
+                                            <form onSubmit={handleResetPassword}>
+                                                {forgotError && <div className="alert alert-danger">{forgotError}</div>}
                                                 <div className="custom-frm-bx">
-
                                                     <input
-
-                                                        type="email"
-
+                                                        type="password"
                                                         className="form-control profile-control pe-5"
-
-                                                        placeholder="Enter New Password"
-
+                                                        placeholder="Enter New Password (min 6 chars)"
+                                                        required
+                                                        value={forgotNewPassword}
+                                                        onChange={(e) => setForgotNewPassword(e.target.value)}
                                                     />
-
                                                     <div className="pass-toggle-box">
-
                                                         <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faEye} />
-
                                                         </button>
-
                                                     </div>
-
                                                 </div>
-
-                                                <div className="custom-frm-bx">
-
+                                                <div className="custom-frm-bx mb-1">
                                                     <input
-
-                                                        type="email"
-
+                                                        type="password"
                                                         className="form-control profile-control pe-5"
-
                                                         placeholder="Confirm Password"
-
+                                                        required
+                                                        value={forgotConfirmPassword}
+                                                        onChange={(e) => setForgotConfirmPassword(e.target.value)}
                                                     />
-
-                                                    <div className="pass-toggle-box">
-
-                                                        <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faEye} />
-
-                                                        </button>
-
-                                                    </div>
-
                                                 </div>
-
-                                                <div className="my-4">
-
+                                                <div className="mt-4">
                                                     <div>
-
-                                                        <button type="button" className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#loginModal">Continue</button>
-
+                                                        <button type="submit" className="nw-thm-btn w-100" disabled={forgotLoading}>
+                                                            {forgotLoading ? "Loading..." : "Continue"}
+                                                        </button>
                                                         <div className="my-3 text-center">
-
                                                             <a href="#" className="card-back-btn" data-bs-toggle="modal" data-bs-target="#otpEmailModal" >Back</a>
-
                                                         </div>
-
                                                     </div>
-
                                                 </div>
-
-
-
-
-
                                             </form>
 
                                         </div>

@@ -55,12 +55,12 @@ const HomeSecond = () => {
         fetchCourses();
     }, []);
     useEffect(() => {
-  if (courses.length > 0) {
-    splideRef1.current?.splide?.refresh();
-    splideRef2.current?.splide?.refresh();
-    splideRef3.current?.splide?.refresh();
-  }
-}, [courses]);
+        if (courses.length > 0) {
+            splideRef1.current?.splide?.refresh();
+            splideRef2.current?.splide?.refresh();
+            splideRef3.current?.splide?.refresh();
+        }
+    }, [courses]);
 
     const fetchCourses = async () => {
         try {
@@ -153,7 +153,7 @@ const HomeSecond = () => {
                                 <h2>Simple, practical AI concepts designed for school students.</h2>
                                 <p>Explore the basics of AI through guided lessons and real examples.Learn how artificial intelligence is shaping the world around us.</p>
                                 <div>
-                                    <NavLink to= "/my-course" className='explore-btn'>Explore Courses</NavLink>
+                                    <NavLink to="/my-course" className='explore-btn'>Explore Courses</NavLink>
                                 </div>
                             </div>
                         </div>
@@ -166,7 +166,7 @@ const HomeSecond = () => {
                 </div>
             </section>
 
-          
+
             <section className='continue-section'>
                 <div className='container'>
                     <div className='row'>
@@ -194,11 +194,11 @@ const HomeSecond = () => {
 
                         {loading ? (
                             <div className="text-center py-5 w-100 spiner-loader">
-                                            <div className="loader-course" role="status">
-                                                <span className=""></span>
-                                            </div>
-                                            <p className="mt-3">Loading courses...</p>
-                                        </div>
+                                <div className="loader-course" role="status">
+                                    <span className=""></span>
+                                </div>
+                                <p className="mt-3">Loading courses...</p>
+                            </div>
                         ) : error ? (
                             <div className="text-center py-5">
                                 <div className="alert alert-danger">
@@ -223,55 +223,55 @@ const HomeSecond = () => {
 
                                                 <div className='row'>
                                                     <div className='col-lg-6'>
-                                                         <div className='udemy-picture'>
-                                                    <img
-                                                        src={course.thumbnail || course.courseImage || "/course_01.png"}
-                                                        alt={course.title}
-                                                    />
+                                                        <div className='udemy-picture'>
+                                                            <img
+                                                                src={course.thumbnail || course.courseImage || "/course_01.png"}
+                                                                alt={course.title}
+                                                            />
 
-                                                    <div className="udemy-category-box">
-                                                        <span className="udemy-seller"> Best Seller </span>
-                                                        <span className="udemy-offer"> 20% OFF </span>
-                                                    </div>
+                                                            <div className="udemy-category-box">
+                                                                <span className="udemy-seller"> Best Seller </span>
+                                                                <span className="udemy-offer"> 20% OFF </span>
+                                                            </div>
 
-                                                </div>
+                                                        </div>
 
                                                     </div>
                                                     <div className='col-lg-6'>
                                                         <div className="udemy-content top-course-list-box">
-                                                  <div>
-                                                      <h4>{course.title}</h4>
-                                                    <span className="pb-2">
-                                                        <FontAwesomeIcon icon={faUser} className="udemy-course-icon" /> <a href="#" className="udemy-user">{course.instructor?.username || 'Instructor'}</a>
+                                                            <div>
+                                                                <h4>{course.title}</h4>
+                                                                <span className="pb-2">
+                                                                    <FontAwesomeIcon icon={faUser} className="udemy-course-icon" /> <a href="#" className="udemy-user">{course.instructor?.username || 'Instructor'}</a>
 
-                                                    </span>
-                                                    <p>{course.description ? course.description.substring(0, 80) + '...' : 'Course description not available'}</p>
-                                                  </div>
-
-                                                    {/* <span >₹{course.price || '999'}</span> */}
-                                                    <div>
-                                                        <ul className="rating-list">
-                                                        <li className="rating-item"> <a href="#" className="rating-text"><FontAwesomeIcon icon={faStar} /> </a> </li>
-                                                        <li className="rating-item"> <a href="#" className="rating-text"><FontAwesomeIcon icon={faStar} /> </a> </li>
-                                                        <li className="rating-item"> <a href="#" className="rating-text"><FontAwesomeIcon icon={faStar} /> </a> </li>
-                                                        <li className="rating-item"> <a href="#" className="rating-text"><FontAwesomeIcon icon={faStar} /> </a> </li>
-                                                        <li className="rating-item"> <a href="#" className="rating-text"><FontAwesomeIcon icon={faStarHalf} /> </a> </li>
-                                                        <li className="rating-item"><span className="rating-number">(1.2K)</span></li>
-                                                    </ul>
-                                                    <div className="progress-wrapper mt-1">
-                                                        <div className="progress-item">
-                                                            <div className="d-flex align-items-center justify-content-between udemy-progress">
-                                                                <span className="udemy-complete-video">(4/10)Video Completed</span>
-                                                                <span className="progress-label fz-12 fw-500">60%</span>
+                                                                </span>
+                                                                <p>{course.description ? course.description.substring(0, 80) + '...' : 'Course description not available'}</p>
                                                             </div>
 
-                                                            <div className="progress custom-progress">
-                                                                <div className="progress-bar" style={{ width: "60%" }}></div>
+                                                            {/* <span >₹{course.price || '999'}</span> */}
+                                                            <div>
+                                                                <ul className="rating-list">
+                                                                    <li className="rating-item"> <a href="#" className="rating-text"><FontAwesomeIcon icon={faStar} /> </a> </li>
+                                                                    <li className="rating-item"> <a href="#" className="rating-text"><FontAwesomeIcon icon={faStar} /> </a> </li>
+                                                                    <li className="rating-item"> <a href="#" className="rating-text"><FontAwesomeIcon icon={faStar} /> </a> </li>
+                                                                    <li className="rating-item"> <a href="#" className="rating-text"><FontAwesomeIcon icon={faStar} /> </a> </li>
+                                                                    <li className="rating-item"> <a href="#" className="rating-text"><FontAwesomeIcon icon={faStarHalf} /> </a> </li>
+                                                                    <li className="rating-item"><span className="rating-number">(1.2K)</span></li>
+                                                                </ul>
+                                                                <div className="progress-wrapper mt-1">
+                                                                    <div className="progress-item">
+                                                                        <div className="d-flex align-items-center justify-content-between udemy-progress">
+                                                                            <span className="udemy-complete-video">(4/10)Video Completed</span>
+                                                                            <span className="progress-label fz-12 fw-500">60%</span>
+                                                                        </div>
+
+                                                                        <div className="progress custom-progress">
+                                                                            <div className="progress-bar" style={{ width: "60%" }}></div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                    </div>
-                                                </div>
 
                                                     </div>
 
@@ -279,8 +279,8 @@ const HomeSecond = () => {
 
 
 
-                                               
-                                                
+
+
                                             </div>
                                         </NavLink>
                                     </div>
@@ -293,7 +293,7 @@ const HomeSecond = () => {
 
             </section>
 
-           
+
             <section className='top-learn-section'>
                 <div className="container">
                     <div className="row">
@@ -307,182 +307,136 @@ const HomeSecond = () => {
                         </div>
 
                         <div className='col-lg-12 mb-3'>
-                            <div className="zs-splide-wrapper">
-                                <Splide
-                                    ref={splideRef1}
-                                    options={{
-                                        type: "loop",
-                                        perPage: 1,
-                                        gap: "20px",
-                                        arrows: false,
-                                        pagination: false,
-                                        breakpoints: {
-                                            992: { perPage: 2 },
-                                            767: { perPage: 1 },
-                                            576: { perPage: 1 },
-                                        },
-                                    }}
-                                >
+                            {currentCourses.map((course) => (
+                                <div key={course._id}>
 
-                                    {loading ? (
-                                        <div className="text-center py-5 w-100 spiner-loader">
-                                            <div className="loader-course" role="status">
-                                                <span className=""></span>
-                                            </div>
-                                            <p className="mt-3">Loading courses...</p>
-                                        </div>
-                                    ) : error ? (
-                                        <div className="text-center py-5">
-                                            <div className="alert alert-danger">
-                                                <h4>Error loading courses</h4>
-                                                <p>{error}</p>
-                                                <button className="btn btn-primary" onClick={fetchCourses}>
-                                                    Try Again
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : courses.length === 0 ? (
-                                        <div className="text-center py-5">
-                                            <h3>No courses available</h3>
-                                            <p>Check back later for new courses.</p>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            {currentCourses.map((course) => (
-                                                <SplideSlide key={course._id}>
+                                    <NavLink
+                                        to={`/course/${course._id}`}
+                                        className="text-decoration-none"
+                                    >
 
-                                                    <NavLink
-                                                        to={`/course/${course._id}`}
-                                                        className="text-decoration-none"
-                                                    >
+                                        <div className="udemy-cards mb-3">
+                                            <div className='row '>
 
-                                                         <div className="udemy-cards">
-                                                            <div className='row'>
+                                                <div className='col-lg-6'>
+                                                    <div className="udemy-picture top-udemy-picture">
+                                                        <img
+                                                            src={
+                                                                course.courseImage
+                                                                    ? course.courseImage
+                                                                    : "/course_01.png"
+                                                            }
+                                                            alt={course.title}
+                                                        />
 
-                                                                <div className='col-lg-6'>
-                                                                    <div className="udemy-picture top-udemy-picture">
-                                                                    <img
-                                                                        src={
-                                                                            course.courseImage
-                                                                                ? course.courseImage
-                                                                                : "/course_01.png"
-                                                                        }
-                                                                        alt={course.title}
+                                                        <div className="udemy-category-box">
+                                                            <span className="udemy-seller">Best Seller</span>
+                                                            <span className="udemy-offer">20% OFF</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className='col-lg-6'>
+                                                    <div className="udemy-content top-udemy-content-box">
+
+                                                        <div className='udemy-course-list top-course-list-box'>
+
+                                                            <div className='udemy-course-top'>
+
+                                                                <h4>{course.title}</h4>
+
+                                                                <span className="pb-2">
+                                                                    <FontAwesomeIcon
+                                                                        icon={faUser}
+                                                                        className="udemy-course-icon"
                                                                     />
 
-                                                                    <div className="udemy-category-box">
-                                                                        <span className="udemy-seller">Best Seller</span>
-                                                                        <span className="udemy-offer">20% OFF</span>
-                                                                    </div>
-                                                                </div>
-                                                                </div>
-                                                                <div className='col-lg-6'>
-                                                                    <div className="udemy-content top-udemy-content-box">
+                                                                    <a className="udemy-user">
+                                                                        {course.instructor?.username || "Admin"}
+                                                                    </a>
+                                                                </span>
 
-                                                                    <div className='udemy-course-list top-course-list-box'>
-
-                                                                        <div className='udemy-course-top'>
-
-                                                                            <h4>{course.title}</h4>
-
-                                                                            <span className="pb-2">
-                                                                                <FontAwesomeIcon
-                                                                                    icon={faUser}
-                                                                                    className="udemy-course-icon"
-                                                                                />
-
-                                                                                <a className="udemy-user">
-                                                                                    {course.instructor?.username || "Admin"}
-                                                                                </a>
-                                                                            </span>
-
-                                                                            <p>
-                                                                                {course.description?.slice(0, 90)}...
-                                                                            </p>
-
-                                                                        </div>
-
-                                                                        <div className='udemy-course-bottom'>
-
-                                                                            <div className='udemy-certificate-content'>
-                                                                                <h6>
-
-                                                                                    <span className='fz-24'>
-                                                                                        <BiSolidBadgeCheck />
-                                                                                    </span>
-
-                                                                                    Certificate Guarantee
-
-                                                                                </h6>
-                                                                            </div>
-
-                                                                            <ul className="rating-list">
-
-                                                                                <li className="rating-item">
-                                                                                    <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                                                                </li>
-
-                                                                                <li className="rating-item">
-                                                                                    <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                                                                </li>
-
-                                                                                <li className="rating-item">
-                                                                                    <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                                                                </li>
-
-                                                                                <li className="rating-item">
-                                                                                    <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                                                                </li>
-
-                                                                                <li className="rating-item">
-                                                                                    <FontAwesomeIcon icon={faStarHalf} className='rating-text' />
-                                                                                </li>
-
-                                                                                <li className="rating-item">
-                                                                                    <span className="rating-number">(1.2K)</span>
-                                                                                </li>
-
-                                                                            </ul>
-
-                                                                            <div className="udemy-course-price">
-
-                                                                                <h5>
-                                                                                    ${course.price}
-
-                                                                                    {course.originalPrice && (
-                                                                                        <del className="udemy-sale">
-                                                                                            ${course.originalPrice}
-                                                                                        </del>
-                                                                                    )}
-
-                                                                                </h5>
-
-                                                                            </div>
-
-                                                                        </div>
-
-                                                                    </div>
-
-                                                                </div>
-                                                                </div>
-
-
-                                                                
-
-                                                               
+                                                                <p>
+                                                                    {course.description?.slice(0, 90)}...
+                                                                </p>
 
                                                             </div>
+
+                                                            <div className='udemy-course-bottom'>
+
+                                                                <div className='udemy-certificate-content'>
+                                                                    <h6>
+
+                                                                        <span className='fz-24'>
+                                                                            <BiSolidBadgeCheck />
+                                                                        </span>
+
+                                                                        Certificate Guarantee
+
+                                                                    </h6>
+                                                                </div>
+
+                                                                <ul className="rating-list">
+
+                                                                    <li className="rating-item">
+                                                                        <FontAwesomeIcon icon={faStar} className='rating-text' />
+                                                                    </li>
+
+                                                                    <li className="rating-item">
+                                                                        <FontAwesomeIcon icon={faStar} className='rating-text' />
+                                                                    </li>
+
+                                                                    <li className="rating-item">
+                                                                        <FontAwesomeIcon icon={faStar} className='rating-text' />
+                                                                    </li>
+
+                                                                    <li className="rating-item">
+                                                                        <FontAwesomeIcon icon={faStar} className='rating-text' />
+                                                                    </li>
+
+                                                                    <li className="rating-item">
+                                                                        <FontAwesomeIcon icon={faStarHalf} className='rating-text' />
+                                                                    </li>
+
+                                                                    <li className="rating-item">
+                                                                        <span className="rating-number">(1.2K)</span>
+                                                                    </li>
+
+                                                                </ul>
+
+                                                                <div className="udemy-course-price">
+
+                                                                    <h5>
+                                                                        ${course.price}
+
+                                                                        {course.originalPrice && (
+                                                                            <del className="udemy-sale">
+                                                                                ${course.originalPrice}
+                                                                            </del>
+                                                                        )}
+
+                                                                    </h5>
+
+                                                                </div>
+
+                                                            </div>
+
                                                         </div>
 
-                                                    </NavLink>
+                                                    </div>
+                                                </div>
 
-                                                </SplideSlide>
-                                            ))}
-                                        </>
-                                    )}
 
-                                </Splide>
-                            </div>
+
+
+
+
+                                            </div>
+                                        </div>
+
+                                    </NavLink>
+
+                                </div>
+                            ))}
 
                             {/* {loading ? (
                                             <div className="text-center py-5">
@@ -668,7 +622,7 @@ const HomeSecond = () => {
                                         )} */}
                         </div>
 
-                        <div className='col-lg-12'>
+                        {/* <div className='col-lg-12'>
                             <div className="zs-splide-wrapper">
                                 <Splide
                                     ref={splideRef2}
@@ -717,120 +671,120 @@ const HomeSecond = () => {
                                                         className="text-decoration-none"
                                                     >
 
-                                                         <div className="udemy-cards">
+                                                        <div className="udemy-cards">
                                                             <div className='row'>
 
                                                                 <div className='col-lg-6'>
                                                                     <div className="udemy-picture top-udemy-picture">
-                                                                    <img
-                                                                        src={
-                                                                            course.courseImage
-                                                                                ? course.courseImage
-                                                                                : "/course_01.png"
-                                                                        }
-                                                                        alt={course.title}
-                                                                    />
+                                                                        <img
+                                                                            src={
+                                                                                course.courseImage
+                                                                                    ? course.courseImage
+                                                                                    : "/course_01.png"
+                                                                            }
+                                                                            alt={course.title}
+                                                                        />
 
-                                                                    <div className="udemy-category-box">
-                                                                        <span className="udemy-seller">Best Seller</span>
-                                                                        <span className="udemy-offer">20% OFF</span>
+                                                                        <div className="udemy-category-box">
+                                                                            <span className="udemy-seller">Best Seller</span>
+                                                                            <span className="udemy-offer">20% OFF</span>
+                                                                        </div>
                                                                     </div>
-                                                                </div>
                                                                 </div>
                                                                 <div className='col-lg-6'>
                                                                     <div className="udemy-content top-udemy-content-box">
 
-                                                                    <div className='udemy-course-list top-course-list-box'>
+                                                                        <div className='udemy-course-list top-course-list-box'>
 
-                                                                        <div className='udemy-course-top'>
+                                                                            <div className='udemy-course-top'>
 
-                                                                            <h4>{course.title}</h4>
+                                                                                <h4>{course.title}</h4>
 
-                                                                            <span className="pb-2">
-                                                                                <FontAwesomeIcon
-                                                                                    icon={faUser}
-                                                                                    className="udemy-course-icon"
-                                                                                />
+                                                                                <span className="pb-2">
+                                                                                    <FontAwesomeIcon
+                                                                                        icon={faUser}
+                                                                                        className="udemy-course-icon"
+                                                                                    />
 
-                                                                                <a className="udemy-user">
-                                                                                    {course.instructor?.username || "Admin"}
-                                                                                </a>
-                                                                            </span>
+                                                                                    <a className="udemy-user">
+                                                                                        {course.instructor?.username || "Admin"}
+                                                                                    </a>
+                                                                                </span>
 
-                                                                            <p>
-                                                                                {course.description?.slice(0, 90)}...
-                                                                            </p>
+                                                                                <p>
+                                                                                    {course.description?.slice(0, 90)}...
+                                                                                </p>
 
-                                                                        </div>
-
-                                                                        <div className='udemy-course-bottom'>
-
-                                                                            <div className='udemy-certificate-content'>
-                                                                                <h6>
-
-                                                                                    <span className='fz-24'>
-                                                                                        <BiSolidBadgeCheck />
-                                                                                    </span>
-
-                                                                                    Certificate Guarantee
-
-                                                                                </h6>
                                                                             </div>
 
-                                                                            <ul className="rating-list">
+                                                                            <div className='udemy-course-bottom'>
 
-                                                                                <li className="rating-item">
-                                                                                    <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                                                                </li>
+                                                                                <div className='udemy-certificate-content'>
+                                                                                    <h6>
 
-                                                                                <li className="rating-item">
-                                                                                    <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                                                                </li>
+                                                                                        <span className='fz-24'>
+                                                                                            <BiSolidBadgeCheck />
+                                                                                        </span>
 
-                                                                                <li className="rating-item">
-                                                                                    <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                                                                </li>
+                                                                                        Certificate Guarantee
 
-                                                                                <li className="rating-item">
-                                                                                    <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                                                                </li>
+                                                                                    </h6>
+                                                                                </div>
 
-                                                                                <li className="rating-item">
-                                                                                    <FontAwesomeIcon icon={faStarHalf} className='rating-text' />
-                                                                                </li>
+                                                                                <ul className="rating-list">
 
-                                                                                <li className="rating-item">
-                                                                                    <span className="rating-number">(1.2K)</span>
-                                                                                </li>
+                                                                                    <li className="rating-item">
+                                                                                        <FontAwesomeIcon icon={faStar} className='rating-text' />
+                                                                                    </li>
 
-                                                                            </ul>
+                                                                                    <li className="rating-item">
+                                                                                        <FontAwesomeIcon icon={faStar} className='rating-text' />
+                                                                                    </li>
 
-                                                                            <div className="udemy-course-price">
+                                                                                    <li className="rating-item">
+                                                                                        <FontAwesomeIcon icon={faStar} className='rating-text' />
+                                                                                    </li>
 
-                                                                                <h5>
-                                                                                    ${course.price}
+                                                                                    <li className="rating-item">
+                                                                                        <FontAwesomeIcon icon={faStar} className='rating-text' />
+                                                                                    </li>
 
-                                                                                    {course.originalPrice && (
-                                                                                        <del className="udemy-sale">
-                                                                                            ${course.originalPrice}
-                                                                                        </del>
-                                                                                    )}
+                                                                                    <li className="rating-item">
+                                                                                        <FontAwesomeIcon icon={faStarHalf} className='rating-text' />
+                                                                                    </li>
 
-                                                                                </h5>
+                                                                                    <li className="rating-item">
+                                                                                        <span className="rating-number">(1.2K)</span>
+                                                                                    </li>
+
+                                                                                </ul>
+
+                                                                                <div className="udemy-course-price">
+
+                                                                                    <h5>
+                                                                                        ${course.price}
+
+                                                                                        {course.originalPrice && (
+                                                                                            <del className="udemy-sale">
+                                                                                                ${course.originalPrice}
+                                                                                            </del>
+                                                                                        )}
+
+                                                                                    </h5>
+
+                                                                                </div>
 
                                                                             </div>
 
                                                                         </div>
 
                                                                     </div>
-
-                                                                </div>
                                                                 </div>
 
 
-                                                                
 
-                                                               
+
+
 
                                                             </div>
                                                         </div>
@@ -857,16 +811,14 @@ const HomeSecond = () => {
                                 </div>
                             </div>
 
-                        </div>
+                        </div> */}
 
-                        <div className='text-center top-more-course'>
-                            <button className='nw-thm-btn'>More</button>
-                        </div>
+                       
                     </div>
                 </div>
             </section>
 
-           
+
             <section className='explore-category-section'>
                 <div className="container">
                     <div className="row">
@@ -910,14 +862,12 @@ const HomeSecond = () => {
                                 </div>
                             </div>
                         </div>
-                        <div className='text-center top-more-course'>
-                            <button className='nw-thm-btn'>More</button>
-                        </div>
+                        
                     </div>
                 </div>
             </section>
 
-            
+
             <section className='choose-us-section'>
                 <div className="container">
                     <div className="row">
@@ -1001,7 +951,7 @@ const HomeSecond = () => {
                 </div>
             </section>
 
-         
+
             <section className='upcoming-section'>
                 <div className="container">
                     <div className="row">
@@ -1029,7 +979,7 @@ const HomeSecond = () => {
                 </div>
             </section>
 
-            
+
             <section className='feedback-section'>
                 <div className="container-fluid">
                     <div className="row">
@@ -1045,7 +995,7 @@ const HomeSecond = () => {
                 </div>
             </section>
 
-            
+
             <section className='faq-section'>
                 <div className="container">
                     <div className="row">

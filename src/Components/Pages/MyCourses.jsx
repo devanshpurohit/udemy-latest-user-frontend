@@ -12,7 +12,7 @@ function MyCourses() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
-    const coursesPerPage = 8;
+    const coursesPerPage = 4;
 
     // Pagination logic
     const totalPages = Math.ceil(courses.length / coursesPerPage);

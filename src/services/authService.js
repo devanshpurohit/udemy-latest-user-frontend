@@ -230,6 +230,87 @@ const updateProfile = async (profileData) => {
     }
 };
 
+// Forgot Password function
+const forgotPassword = async (email) => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email })
+        });
+        const data = await response.json();
+        if (response.ok) {
+            return { success: true, data };
+        } else {
+            return { success: false, error: data.message || 'Request failed' };
+        }
+    } catch (error) {
+        console.error('Forgot password error:', error);
+        return { success: false, error: 'Network error. Please try again.' };
+    }
+};
+
+// Verify OTP function
+const verifyOtp = async (email, otp) => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, otp })
+        });
+        const data = await response.json();
+        if (response.ok) {
+            const token = data.token || data.data?.token;
+            const user = data.user || data.data?.user;
+            
+            if (token && user) {
+                // Store for auto-login
+                const userWithProfile = {
+                    ...user,
+                    profile: {
+                        ...user?.profile,
+                        profileImage: user?.profile?.profileImage || null
+                    }
+                };
+                setToken(token);
+                setUser(userWithProfile);
+            }
+            return { success: true, data };
+        } else {
+            return { success: false, error: data.message || 'OTP verification failed' };
+        }
+    } catch (error) {
+        console.error('Verify OTP error:', error);
+        return { success: false, error: 'Network error. Please try again.' };
+    }
+};
+
+// Reset Password function
+const resetPassword = async (email, newPassword) => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, newPassword })
+        });
+        const data = await response.json();
+        if (response.ok) {
+            return { success: true, data };
+        } else {
+            return { success: false, error: data.message || 'Reset password failed' };
+        }
+    } catch (error) {
+        console.error('Reset password error:', error);
+        return { success: false, error: 'Network error. Please try again.' };
+    }
+};
+
 // Get auth headers for API calls
 const getAuthHeaders = () => {
     const token = getToken();
@@ -262,6 +343,28 @@ const verifyToken = async () => {
     }
 };
 
+// Verify AI Card function
+const verifyAICard = async (cardNumber, cvv) => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/ai-cards/verify`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ cardNumber, cvv })
+        });
+        const data = await response.json();
+        if (response.ok) {
+            return { success: true, data };
+        } else {
+            return { success: false, error: data.message || 'Card verification failed' };
+        }
+    } catch (error) {
+        console.error('Verify card error:', error);
+        return { success: false, error: 'Network error. Please try again.' };
+    }
+};
+
 export {
     login,
     register,
@@ -273,5 +376,9 @@ export {
     verifyToken,
     updateProfile,
     setToken,
-    setUser
+    setUser,
+    forgotPassword,
+    verifyOtp,
+    resetPassword,
+    verifyAICard
 };

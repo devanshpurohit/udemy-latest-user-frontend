@@ -434,6 +434,7 @@ function MyDashboard() {
                                                                         <th>Invoice Number </th>
                                                                         <th>Course</th>
                                                                         <th>Amount</th>
+                                                                        <th>Payment Method</th>
                                                                         <th>Status</th>
                                                                         <th>Actions</th>
                                                                     </tr>
@@ -456,7 +457,12 @@ function MyDashboard() {
                                                                                 </td>
                                                                                 <td>₹{order.amount}</td>
                                                                                 <td>
-                                                                                    <span className="public-title">{order.paymentStatus}</span>
+                                                                                    {order.paymentMethod === 'bank_transfer' || order.paymentMethod === 'Bank Transfer' ? 'Bank Transfer' : (order.paymentMethod === 'upi' || order.paymentMethod === 'UPI' ? 'UPI' : 'UPI')}
+                                                                                </td>
+                                                                                <td>
+                                                                                    <span className={order.paymentStatus === 'completed' ? 'public-title' : 'pending-title'}>
+                                                                                         {order.paymentStatus === 'completed' ? 'Paid' : 'Pending'}
+                                                                                     </span>
                                                                                 </td>
                                                                                 <td>
                                                                                     <span>
@@ -712,10 +718,12 @@ alt={order.courseId?.title}
 
   <td>₹{order.amount}</td>
 
-  <td>{order.paymentMethod || "UPI"}</td>
+  <td>{order.paymentMethod === 'bank_transfer' || order.paymentMethod === 'Bank Transfer' ? 'Bank Transfer' : (order.paymentMethod === 'upi' || order.paymentMethod === 'UPI' ? 'UPI' : 'UPI')}</td>
 
   <td>
-    <span className="public-title">{order.paymentStatus}</span>
+    <span className={order.paymentStatus === 'completed' ? 'public-title' : 'pending-title'}>
+                                                                                         {order.paymentStatus === 'completed' ? 'Paid' : 'Pending'}
+                                                                                     </span>
   </td>
 
   <td>

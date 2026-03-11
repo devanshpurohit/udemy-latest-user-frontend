@@ -3,6 +3,7 @@ import { BiSolidOffer } from "react-icons/bi";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faClose, faDownload, faStar, faStarHalf, faUser } from "@fortawesome/free-solid-svg-icons";
 import { SiPhonepe } from "react-icons/si";
+import { toast } from "react-toastify";
 
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate, useParams } from "react-router-dom";
@@ -150,7 +151,7 @@ const total = subTotal + gst;
 
             sessionStorage.clear();
 
-            alert("Payment Successful 🎉");
+            toast.success("Payment Successful 🎉");
 
             const firstCourse = courses[0];
 
@@ -161,8 +162,8 @@ const total = subTotal + gst;
 
               document.querySelectorAll(".modal-backdrop").forEach(el => el.remove());
 document.body.classList.remove("modal-open");
-document.body.style.overflow = "auto";
-
+document.body.style.overflow = "";
+document.body.style.paddingRight = "";
 
 navigate(`/course/${finalCourseIds[0]}/learn`, {
     state: {
@@ -174,14 +175,14 @@ navigate(`/course/${finalCourseIds[0]}/learn`, {
 
         } else {
 
-            alert(data?.message || "Payment failed");
+            toast.error(data?.message || "Payment failed");
 
         }
 
     } catch (e) {
 
         console.error("❌ BuyCourse: purchase error", e);
-        alert("Payment failed");
+        toast.error("Payment failed");
 
     } finally {
 
@@ -707,8 +708,6 @@ Pay Now
                                     <button
                                         type="button"
                                         className="thm-btn w-100"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#compelte-Successful"
                                         onClick={handlePayment}
                                         disabled={purchasing}
                                     >

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { toast } from "react-toastify";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronDown, faClose, faEnvelope, faEye, faPhone, faTimes, faUser, faShoppingCart, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
 import { FaUser } from "react-icons/fa";
@@ -6,7 +7,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { BsCreditCardFill } from "react-icons/bs";
 import { IoInformationCircle } from "react-icons/io5";
 import { useAuth } from '../../contexts/AuthContext';
-import { login } from '../../services/authService';
+import { login, forgotPassword as authForgotPassword, verifyOtp as authVerifyOtp, resetPassword as authResetPassword, verifyAICard, register as authRegister } from '../../services/authService';
 
 
 
@@ -19,6 +20,25 @@ const Header = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [forgotEmail, setForgotEmail] = useState('');
+    const [forgotOTP, setForgotOTP] = useState(['', '', '', '']);
+    const [forgotNewPassword, setForgotNewPassword] = useState('');
+    const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+    const [forgotLoading, setForgotLoading] = useState(false);
+    const [forgotError, setForgotError] = useState('');
+
+    // Registration State
+    const [regStep, setRegStep] = useState(1);
+    const [regCardNumber, setRegCardNumber] = useState('');
+    const [regCvv, setRegCvv] = useState('');
+    const [regUsername, setRegUsername] = useState('');
+    const [regEmail, setRegEmail] = useState('');
+    const [regPhone, setRegPhone] = useState('');
+    const [regPassword, setRegPassword] = useState('');
+    const [regOtp, setRegOtp] = useState(['', '', '', '']);
+    const [regLoading, setRegLoading] = useState(false);
+    const [regError, setRegError] = useState('');
+    
     const navigate = useNavigate();
     const [cartItems, setCartItems] = useState([]);
 
@@ -119,6 +139,231 @@ const Header = () => {
         }
     };
 
+    const handleForgotPassword = async (e) => {
+        e.preventDefault();
+        setForgotError('');
+        setForgotLoading(true);
+        try {
+            const result = await authForgotPassword(forgotEmail);
+            if(result.success) {
+                // Close current modal
+                const forgotModal = window.bootstrap?.Modal?.getInstance(document.getElementById('forgotPasswordModal'));
+                if(forgotModal) forgotModal.hide();
+                // Open OTP modal
+                const otpModal = new window.bootstrap.Modal(document.getElementById('otpModal'));
+                otpModal.show();
+            } else {
+                setForgotError(result.error);
+            }
+        } catch (err) {
+            setForgotError('Request failed');
+        } finally {
+            setForgotLoading(false);
+        }
+    };
+
+    const handleVerifyOtp = async (e) => {
+        e.preventDefault();
+        setForgotError('');
+        setForgotLoading(true);
+        const otpString = forgotOTP.join('');
+        if (otpString.length !== 4) {
+            setForgotError('Please enter a valid 4-digit OTP');
+            setForgotLoading(false);
+            return;
+        }
+        try {
+            const result = await authVerifyOtp(forgotEmail, otpString);
+            if(result.success) {
+                // Close current modal
+                const otpModalEl = document.getElementById('otpModal');
+                const otpModal = window.bootstrap?.Modal?.getInstance(otpModalEl);
+                if(otpModal) otpModal.hide();
+                // Open Set Password Modal
+                const setPasswordModal = new window.bootstrap.Modal(document.getElementById('setPasswordModal'));
+                setPasswordModal.show();
+            } else {
+                setForgotError(result.error);
+            }
+        } catch (err) {
+            setForgotError('Verification failed');
+        } finally {
+            setForgotLoading(false);
+        }
+    };
+
+    const handleOtpChange = (element, index) => {
+        if (isNaN(element.value)) return;
+        const newOtp = [...forgotOTP];
+        newOtp[index] = element.value.substring(0, 1);
+        setForgotOTP(newOtp);
+        // Focus next input
+        if (element.nextSibling && element.value) {
+            element.nextSibling.focus();
+        }
+    };
+    
+    const handleOtpKeyDown = (e, index) => {
+        if (e.key === 'Backspace') {
+            if (!forgotOTP[index] && e.target.previousSibling) {
+                e.target.previousSibling.focus();
+            }
+        }
+    };
+
+    const handleResetPassword = async (e) => {
+        e.preventDefault();
+        setForgotError('');
+        if(forgotNewPassword !== forgotConfirmPassword) {
+            setForgotError("Passwords do not match");
+            return;
+        }
+        setForgotLoading(true);
+        try {
+            const result = await authResetPassword(forgotEmail, forgotNewPassword);
+            if(result.success) {
+                // Close current modal
+                const setPasswordModalEl = document.getElementById('setPasswordModal');
+                const setPasswordModal = window.bootstrap?.Modal?.getInstance(setPasswordModalEl);
+                if(setPasswordModal) setPasswordModal.hide();
+                // Open Login Modal
+                const loginModal = new window.bootstrap.Modal(document.getElementById('loginModal'));
+                loginModal.show();
+                setForgotEmail('');
+                setForgotOTP(['', '', '', '']);
+                setForgotNewPassword('');
+                setForgotConfirmPassword('');
+            } else {
+                setForgotError(result.error);
+            }
+        } catch (err) {
+            setForgotError('Reset failed');
+        } finally {
+            setForgotLoading(false);
+        }
+    };
+
+    // Registration Step 1: Verify AI Card
+    const handleCardVerify = async (e) => {
+        e.preventDefault();
+        setRegError('');
+        setRegLoading(true);
+        try {
+            const result = await verifyAICard(regCardNumber, regCvv);
+            if (result.success) {
+                setRegStep(2);
+                hideModal('register');
+                showModal('registerProfile');
+            } else {
+                setRegError(result.error);
+            }
+        } catch (err) {
+            setRegError('Verification failed');
+        } finally {
+            setRegLoading(false);
+        }
+    };
+
+    // Registration Step 2: Profile Registration
+    const handleRegistration = async (e) => {
+        e.preventDefault();
+        setRegError('');
+        setRegLoading(true);
+        try {
+            const userData = {
+                username: regUsername,
+                email: regEmail,
+                phone: regPhone,
+                password: regPassword,
+                cardNumber: regCardNumber,
+                cvv: regCvv
+            };
+            const result = await authRegister(userData);
+            if (result.success) {
+                setRegStep(3);
+                hideModal('registerProfile');
+                showModal('otpModal');
+            } else {
+                setRegError(result.error);
+            }
+        } catch (err) {
+            setRegError('Registration failed');
+        } finally {
+            setRegLoading(false);
+        }
+    };
+
+    // Registration Step 3: OTP Verification
+    const handleRegistrationOtpVerify = async (e) => {
+        e.preventDefault();
+        setRegError('');
+        setRegLoading(true);
+        const otpString = regOtp.join('');
+        try {
+            const result = await authVerifyOtp(regEmail, otpString);
+            if (result.success) {
+                hideModal('otpModal');
+                toast.success("You are Verified!");
+                
+                // Get user data for auto-login
+                const userData = result.data?.user || result.data?.data?.user;
+                if (userData) {
+                    authLogin(userData);
+                }
+
+                setRegStep(1);
+                setRegCardNumber('');
+                setRegCvv('');
+                setRegUsername('');
+                setRegEmail('');
+                setRegPhone('');
+                setRegPassword('');
+                setRegOtp(['', '', '', '']);
+                navigate('/home-second');
+            } else {
+                setRegError(result.error);
+            }
+        } catch (err) {
+            setRegError('Verification failed');
+        } finally {
+            setRegLoading(false);
+        }
+    };
+
+    const hideModal = (id) => {
+        const modalEl = document.getElementById(id);
+        if (modalEl) {
+            const modal = window.bootstrap?.Modal?.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
+            modal.hide();
+        }
+    };
+
+    const showModal = (id) => {
+        const modalEl = document.getElementById(id);
+        if (modalEl) {
+            const modal = new window.bootstrap.Modal(modalEl);
+            modal.show();
+        }
+    };
+
+    const handleRegOtpChange = (element, index) => {
+        if (isNaN(element.value)) return;
+        const newOtp = [...regOtp];
+        newOtp[index] = element.value.substring(0, 1);
+        setRegOtp(newOtp);
+        if (element.nextSibling && element.value) {
+            element.nextSibling.focus();
+        }
+    };
+
+    const handleRegOtpKeyDown = (e, index) => {
+        if (e.key === 'Backspace') {
+            if (!regOtp[index] && e.target.previousSibling) {
+                e.target.previousSibling.focus();
+            }
+        }
+    };
+
     const handleLogout = () => {
         // redirect before clearing so protected routes don’t bounce
         navigate('/');
@@ -134,14 +379,6 @@ const Header = () => {
         }
     }, []);
 
-    useEffect(() => {
-        const handleScroll = () => {
-            setIsFixed(window.scrollY > 50);
-        };
-
-        window.addEventListener("scroll", handleScroll);
-        return () => window.removeEventListener("scroll", handleScroll);
-    }, []);
 
 
     // Mobile view no scroll
@@ -262,7 +499,7 @@ const Header = () => {
             {/*Login Popup Start  */}
             {/* data-bs-toggle="modal" data-bs-target="#loginModal" */}
             <div className="modal step-modal fade" id="loginModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
-                aria-labelledby="staticBackdropLabel" aria-hidden="true">
+                aria-labelledby="staticBackdropLabel" aria-hidden="true" style={{ zIndex: 9999 }}>
                 <div className="modal-dialog modal-dialog-centered modal-xl">
                     <div className="modal-content custom-modal-box p-0 rounded-0">
                         <div className="text-end">
@@ -355,17 +592,17 @@ const Header = () => {
                                                 </div>
                                                 <div className="udemy-tp-line">
 
-                                                  <p>Don't have an account? 
-<button
-type="button"
-className="udemy-back-login"
-data-bs-dismiss="modal"
-data-bs-toggle="modal"
-data-bs-target="#register"
->
-Sign-up
-</button>
-</p>
+                                                    <p>Don't have an account?
+                                                        <button
+                                                            type="button"
+                                                            className="udemy-back-login"
+                                                            data-bs-dismiss="modal"
+                                                            data-bs-toggle="modal"
+                                                            data-bs-target="#register"
+                                                        >
+                                                            Sign-up
+                                                        </button>
+                                                    </p>
                                                 </div>
 
 
@@ -384,7 +621,7 @@ Sign-up
             {/*Forgot Password Start  */}
             {/* data-bs-toggle="modal" data-bs-target="#forgotPasswordModal" */}
             <div className="modal step-modal fade" id="forgotPasswordModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
-                aria-labelledby="staticBackdropLabel" aria-hidden="true">
+                aria-labelledby="staticBackdropLabel" aria-hidden="true" style={{ zIndex: 9999 }}>
                 <div className="modal-dialog modal-dialog-centered modal-xl">
                     <div className="modal-content custom-modal-box p-0 rounded-0">
                         <div className="text-end">
@@ -410,12 +647,16 @@ Sign-up
                                                 <h4>Enter your Email Address for Verification</h4>
                                             </div>
 
-                                            <form action="">
+                                            <form onSubmit={handleForgotPassword}>
+                                                {forgotError && <div className="alert alert-danger">{forgotError}</div>}
                                                 <div className="custom-frm-bx">
                                                     <input
                                                         type="email"
                                                         className="form-control profile-control pe-5"
                                                         placeholder="Enter Email Id"
+                                                        required
+                                                        value={forgotEmail}
+                                                        onChange={(e) => setForgotEmail(e.target.value)}
                                                     />
                                                     <div className="pass-toggle-box">
                                                         <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faEnvelope} />
@@ -424,9 +665,11 @@ Sign-up
                                                 </div>
                                                 <div className="my-4">
                                                     <div>
-                                                        <button type="button" className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#otpEmailModal" >Continue</button>
+                                                        <button type="submit" className="nw-thm-btn w-100" disabled={forgotLoading}>
+                                                            {forgotLoading ? 'Loading...' : 'Continue'}
+                                                        </button>
                                                         <div className="my-3 text-center">
-                                                            <a href="#" className="card-back-btn" data-bs-toggle="modal" data-bs-target="#loginModal">Back</a>
+                                                            <a href="#" className="card-back-btn" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#loginModal">Back</a>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -444,94 +687,11 @@ Sign-up
             </div>
             {/* Forgot Password End */}
 
-            {/*Login Popup Start  */}
-            {/* data-bs-toggle="modal" data-bs-target="#login" */}
-            <div className="modal step-modal fade" id="login" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
-                aria-labelledby="staticBackdropLabel" aria-hidden="true">
-                <div className="modal-dialog modal-dialog-centered modal-xl">
-                    <div className="modal-content custom-modal-box p-0 rounded-0">
-                        <div className="text-end">
-
-                        </div>
-                        <div className="modal-body p-0">
-                            <div className="row">
-                                <div className="col-lg-6">
-                                    <div className="admin-picture-box">
-                                        <img src="/auth_banner.png" alt="" />
-                                    </div>
-
-                                </div>
-                                <div className="col-lg-6">
-
-                                    <div className="text-end pe-3 pt-3">
-                                        <button type="button" className="modal-close-btn text-black fz-18" data-bs-dismiss="modal" aria-label="Close">
-                                            <FontAwesomeIcon icon={faClose} />
-                                        </button>
-                                    </div>
-
-                                    <div className="login-container">
-                                        <div className="login-header-content">
-                                            <div className="lg_sub_content">
-                                                <h4>Register your AI Card and unlock a smarter way to learn</h4>
-                                            </div>
-
-                                            <form action="">
-                                                <div className="custom-frm-bx">
-                                                    <input
-                                                        type="number"
-                                                        className="form-control profile-control pe-5"
-                                                        placeholder="Enter 12 Digit Card Number"
-                                                    />
-                                                    <div className="pass-toggle-box">
-                                                        <button type="button" className="pass-eye-btn"> <BsCreditCardFill />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div className="custom-frm-bx">
-                                                    <input
-                                                        type="password"
-                                                        className="form-control profile-control pe-5"
-                                                        placeholder="CVV Number"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <span className="card-info-title"><IoInformationCircle />  Check your AI Card for these details.</span>
-                                                </div>
-
-                                                <div className="my-5">
-                                                    <button type="button" className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#registerProfile">Continue</button>
-                                                </div>
-
-                                                <div className="udemy-tp-line">
-                                            <button
-  type="button"
-  className="udemy-back-login"
-  data-bs-dismiss="modal"
-  data-bs-toggle="modal"
-  data-bs-target="#loginModal"
->
-  Login
-</button>
-</div>
-
-
-
-                                            </form>
-                                        </div>
-
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {/*  Login Popup End */}
 
             {/*Register Popup Start  */}
             {/* data-bs-toggle="modal" data-bs-target="#register" */}
             <div className="modal step-modal fade" id="register" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
-                aria-labelledby="staticBackdropLabel" aria-hidden="true">
+                aria-labelledby="staticBackdropLabel" aria-hidden="true" style={{ zIndex: 9999 }}>
                 <div className="modal-dialog modal-dialog-centered modal-xl">
                     <div className="modal-content custom-modal-box p-0 rounded-0">
                         <div className="text-end">
@@ -559,12 +719,16 @@ Sign-up
                                                 <h4>Register to your website name Account</h4>
                                             </div>
 
-                                            <form action="">
+                                            <form onSubmit={handleCardVerify}>
+                                                {regError && <div className="alert alert-danger">{regError}</div>}
                                                 <div className="custom-frm-bx">
                                                     <input
                                                         type="number"
                                                         className="form-control profile-control pe-5"
                                                         placeholder="Enter 12 Digit Card Number"
+                                                        required
+                                                        value={regCardNumber}
+                                                        onChange={(e) => setRegCardNumber(e.target.value)}
                                                     />
                                                     <div className="pass-toggle-box">
                                                         <button type="button" className="pass-eye-btn"> <BsCreditCardFill />
@@ -576,37 +740,38 @@ Sign-up
                                                         type="password"
                                                         className="form-control profile-control pe-5"
                                                         placeholder="CVV Number"
+                                                        required
+                                                        value={regCvv}
+                                                        onChange={(e) => setRegCvv(e.target.value)}
                                                     />
                                                 </div>
                                                 <div className="text-center">
-                                                    <span className="card-already-title">Your AI Card is already registered. Log in to continue.</span>
+                                                    <span className="card-already-title">Enter your AI card details to proceed with registration.</span>
                                                 </div>
 
                                                 <div className="mt-5">
                                                     <div>
-                                                        <button className="nw-thm-btn w-100 udemy-not-btn">Continue</button>
+                                                        <button type="submit" className="nw-thm-btn w-100" disabled={regLoading}>
+                                                            {regLoading ? 'Verifying...' : 'Continue'}
+                                                        </button>
                                                     </div>
 
                                                     <div className="my-3 text-center">
-                                                        <a href="#" className="card-back-btn">Back</a>
+                                                        <a href="#" className="card-back-btn" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#loginModal">Back</a>
                                                     </div>
                                                 </div>
 
                                                 <div className="udemy-tp-line">
                                                     <p>Already registered your AI Card? <button
-type="button"
-className="udemy-back-login"
-data-bs-dismiss="modal"
-data-bs-toggle="modal"
-data-bs-target="#loginModal"
->
-Login
-</button> </p>
+                                                        type="button"
+                                                        className="udemy-back-login"
+                                                        data-bs-dismiss="modal"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#loginModal"
+                                                    >
+                                                        Login
+                                                    </button> </p>
                                                 </div>
-
-
-
-
                                             </form>
                                         </div>
 
@@ -622,7 +787,7 @@ Login
             {/*Register Popup Start  */}
             {/* data-bs-toggle="modal" data-bs-target="#registerProfile" */}
             <div className="modal step-modal fade" id="registerProfile" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
-                aria-labelledby="staticBackdropLabel" aria-hidden="true">
+                aria-labelledby="staticBackdropLabel" aria-hidden="true" style={{ zIndex: 9999 }}>
                 <div className="modal-dialog modal-dialog-centered modal-xl">
                     <div className="modal-content custom-modal-box p-0 rounded-0">
                         <div className="text-end">
@@ -650,14 +815,18 @@ Login
                                                 <h4>Complete Your Profile</h4>
                                             </div>
 
-                                            <form action="">
+                                            <form onSubmit={handleRegistration}>
+                                                {regError && <div className="alert alert-danger">{regError}</div>}
                                                 <div className='row'>
                                                     <div className='col-lg-6'>
                                                         <div className="custom-frm-bx">
                                                             <input
                                                                 type="text"
                                                                 className="form-control profile-control"
-                                                                placeholder="First Name"
+                                                                placeholder="Username"
+                                                                required
+                                                                value={regUsername}
+                                                                onChange={(e) => setRegUsername(e.target.value)}
                                                             />
 
                                                         </div>
@@ -668,7 +837,10 @@ Login
                                                             <input
                                                                 type="text"
                                                                 className="form-control profile-control"
-                                                                placeholder="Last Name"
+                                                                placeholder="Email Address"
+                                                                required
+                                                                value={regEmail}
+                                                                onChange={(e) => setRegEmail(e.target.value)}
                                                             />
                                                         </div>
                                                     </div>
@@ -676,13 +848,17 @@ Login
                                                     <div className='col-lg-12'>
                                                         <div className="custom-frm-bx">
                                                             <input
-                                                                type="enail"
-                                                                className="form-control profile-control"
-                                                                placeholder="Country"
+                                                                type="password"
+                                                                className="form-control profile-control pe-5"
+                                                                placeholder="Password"
+                                                                required
+                                                                value={regPassword}
+                                                                onChange={(e) => setRegPassword(e.target.value)}
                                                             />
 
                                                             <div className="pass-toggle-box">
-                                                                <button type="button" className="pass-eye-btn">  <FontAwesomeIcon icon={faEnvelope} />
+                                                                <button type="button" className="pass-eye-btn" onClick={() => setShowPassword(!showPassword)}>
+                                                                    <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -707,7 +883,9 @@ Login
                                                                     id="mobileNumber"
                                                                     placeholder="Mobile Number"
                                                                     class="form-control border-0 px-0 profile-control"
-
+                                                                    required
+                                                                    value={regPhone}
+                                                                    onChange={(e) => setRegPhone(e.target.value)}
                                                                 />
                                                             </div>
 
@@ -722,11 +900,13 @@ Login
 
                                                     <div className="mt-4">
                                                         <div>
-                                                            <button type="button" className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#otpModal">Continue</button>
+                                                            <button type="submit" className="nw-thm-btn w-100" disabled={regLoading}>
+                                                                {regLoading ? 'Registering...' : 'Register'}
+                                                            </button>
                                                         </div>
 
                                                         <div className="my-3 text-center">
-                                                            <a href="#" className="card-back-btn" data-bs-toggle="modal" data-bs-target="#login">Back</a>
+                                                            <a href="#" className="card-back-btn" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#register">Back</a>
                                                         </div>
                                                     </div>
 
@@ -755,7 +935,7 @@ Login
             {/*Otp Popup Start  */}
             {/* data-bs-toggle="modal" data-bs-target="#otpModal" */}
             <div className="modal step-modal fade" id="otpModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
-                aria-labelledby="staticBackdropLabel" aria-hidden="true">
+                aria-labelledby="staticBackdropLabel" aria-hidden="true" style={{ zIndex: 9999 }}>
                 <div className="modal-dialog modal-dialog-centered modal-xl">
                     <div className="modal-content custom-modal-box p-0 rounded-0">
                         <div className="text-end">
@@ -779,34 +959,52 @@ Login
                                         <div className="login-header-content">
                                             <div className="lg_sub_content">
                                                 <h6>Enter Verification</h6>
-                                                <h4>Enter the OTP sent to <span className="verify-email-title"> xyz@gmail.com</span> to continue.</h4>
+                                                <h4>Enter the OTP sent to <span className="verify-email-title"> {regEmail || forgotEmail || 'your email'}</span> to continue.</h4>
 
                                             </div>
 
-                                            <form action="">
+                                            <form onSubmit={regEmail ? handleRegistrationOtpVerify : handleVerifyOtp}>
                                                 <div className='row'>
+                                                    {(forgotError || regError) && (
+                                                        <div className="alert alert-danger mb-3">
+                                                            {forgotError || regError}
+                                                        </div>
+                                                    )}
                                                     <div className="col-lg-12">
                                                         <div className="otp-wrapper custom-frm-bx">
-                                                            <input type="number" className="otp-input" />
-                                                            <input type="number" className="otp-input" />
-                                                            <input type="number" className="otp-input" />
-                                                            <input type="number" className="otp-input" />
+                                                            {(regEmail ? regOtp : forgotOTP).map((data, index) => {
+                                                                return (
+                                                                    <input
+                                                                        className="otp-input"
+                                                                        type="text"
+                                                                        name="otp"
+                                                                        maxLength="1"
+                                                                        key={index}
+                                                                        value={data}
+                                                                        onChange={e => regEmail ? handleRegOtpChange(e.target, index) : handleOtpChange(e.target, index)}
+                                                                        onFocus={e => e.target.select()}
+                                                                        onKeyDown={e => regEmail ? handleRegOtpKeyDown(e, index) : handleOtpKeyDown(e, index)}
+                                                                    />
+                                                                );
+                                                            })}
                                                         </div>
                                                     </div>
 
                                                     <div className="mt-4">
                                                         <div>
-                                                            <button className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#setPasswordModal">Continue</button>
+                                                            <button type="submit" className="nw-thm-btn w-100" disabled={regLoading || forgotLoading}>
+                                                                {regLoading || forgotLoading ? 'Verifying...' : 'Continue'}
+                                                            </button>
                                                         </div>
 
                                                         <div className="my-3 text-center">
-                                                            <a href="#" className="card-back-btn" data-bs-toggle="modal" data-bs-target="#registerProfile" >Back</a>
+                                                            <a href="#" className="card-back-btn" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target={regEmail ? "#registerProfile" : "#forgotPasswordModal"} >Back</a>
                                                         </div>
                                                     </div>
 
                                                     <div className="udemy-tp-line border-top-0">
 
-                                                        <p>Didn't receive the code? <a href="#" className="udemy-back-login">Resend</a> <span className="resend-title">in 30s</span> </p>
+                                                        <p>Didn't receive the code? <button type="button" onClick={handleForgotPassword} className="udemy-back-login border-0 bg-transparent">Resend</button> </p>
                                                     </div>
 
                                                 </div>
@@ -825,7 +1023,7 @@ Login
             {/*Set Password Popup Start  */}
             {/* data-bs-toggle="modal" data-bs-target="#setPasswordModal" */}
             <div className="modal step-modal fade" id="setPasswordModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
-                aria-labelledby="staticBackdropLabel" aria-hidden="true">
+                aria-labelledby="staticBackdropLabel" aria-hidden="true" style={{ zIndex: 9999 }}>
                 <div className="modal-dialog modal-dialog-centered modal-xl">
                     <div className="modal-content custom-modal-box p-0 rounded-0">
                         <div className="text-end">
@@ -853,25 +1051,16 @@ Login
 
                                             </div>
 
-                                            <form action="">
-
+                                            <form onSubmit={handleResetPassword}>
+                                                {forgotError && <div className="alert alert-danger">{forgotError}</div>}
                                                 <div className="custom-frm-bx">
                                                     <input
-                                                        type="text"
+                                                        type="password"
                                                         className="form-control profile-control pe-5"
-                                                        placeholder="XYZ"
-                                                    />
-                                                    <div className="pass-toggle-box">
-                                                        <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faUser} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                <div className="custom-frm-bx">
-                                                    <input
-                                                        type="text"
-                                                        className="form-control profile-control pe-5"
-                                                        placeholder="Enter 6 digit Password"
+                                                        placeholder="Enter New Password (min 6 chars)"
+                                                        required
+                                                        value={forgotNewPassword}
+                                                        onChange={(e) => setForgotNewPassword(e.target.value)}
                                                     />
                                                     <div className="pass-toggle-box">
                                                         <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faEye} />
@@ -881,21 +1070,22 @@ Login
 
                                                 <div className="custom-frm-bx mb-1" >
                                                     <input
-                                                        type="text"
+                                                        type="password"
                                                         className="form-control profile-control pe-5"
                                                         placeholder="Confirm Password"
+                                                        required
+                                                        value={forgotConfirmPassword}
+                                                        onChange={(e) => setForgotConfirmPassword(e.target.value)}
                                                     />
 
-                                                </div>
-
-                                                <div className="text-end">
-                                                    <span className="verify-title">Password Verified</span>
                                                 </div>
 
 
                                                 <div className="mt-4">
                                                     <div>
-                                                        <button type="button" className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#login">Continue</button>
+                                                        <button type="submit" className="nw-thm-btn w-100" disabled={forgotLoading}>
+                                                            {forgotLoading ? "Loading..." : "Continue"}
+                                                        </button>
                                                     </div>
 
                                                 </div>
@@ -913,157 +1103,6 @@ Login
             </div>
             {/* Set Password End */}
 
-            {/*Otp Popup Start  */}
-            {/* data-bs-toggle="modal" data-bs-target="#otpEmailModal" */}
-            <div className="modal step-modal fade" id="otpEmailModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
-                aria-labelledby="staticBackdropLabel" aria-hidden="true">
-                <div className="modal-dialog modal-dialog-centered modal-xl">
-                    <div className="modal-content custom-modal-box p-0 rounded-0">
-                        <div className="text-end">
-                        </div>
-                        <div className="modal-body p-0">
-                            <div className="row">
-                                <div className="col-lg-6">
-                                    <div className="admin-picture-box">
-                                        <img src="/auth_banner.png" alt="" />
-                                    </div>
-                                </div>
-                                <div className="col-lg-6">
-
-                                    <div className="text-end pe-3 pt-3">
-                                        <button type="button" className="modal-close-btn text-black fz-18" data-bs-dismiss="modal" aria-label="Close">
-                                            <FontAwesomeIcon icon={faClose} />
-                                        </button>
-                                    </div>
-
-                                    <div className="login-container">
-                                        <div className="login-header-content">
-                                            <div className="lg_sub_content">
-                                                <h6>Enter Verification</h6>
-                                                <h4>Enter the OTP sent to <span className="verify-email-title"> xyz@gmail.com</span> to continue.</h4>
-
-                                            </div>
-
-                                            <form action="">
-                                                <div className='row'>
-                                                    <div className="col-lg-12">
-                                                        <div className="otp-wrapper custom-frm-bx">
-                                                            <input type="number" className="otp-input" />
-                                                            <input type="number" className="otp-input" />
-                                                            <input type="number" className="otp-input" />
-                                                            <input type="number" className="otp-input" />
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="mt-3">
-                                                        <div>
-                                                            <button type="button" className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#NewPasswordModal">Continue</button>
-                                                        </div>
-
-                                                        <div className="my-2 text-center">
-                                                          <button
-type="button"
-className="card-back-btn"
-data-bs-dismiss="modal"
-data-bs-toggle="modal"
-data-bs-target="#loginModal"
->
-Back
-</button>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="udemy-tp-line border-top-0">
-
-                                                        <p>Didn't receive the code? <a href="#" className="udemy-back-login">Resend</a> <span className="resend-title">in 30s</span> </p>
-                                                    </div>
-
-                                                </div>
-                                            </form>
-                                        </div>
-
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {/*  Otp Popup End */}
-
-            {/*Forgot Password Start  */}
-            {/* data-bs-toggle="modal" data-bs-target="#NewPasswordModal" */}
-            <div className="modal step-modal fade" id="NewPasswordModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
-                aria-labelledby="staticBackdropLabel" aria-hidden="true">
-                <div className="modal-dialog modal-dialog-centered modal-xl">
-                    <div className="modal-content custom-modal-box p-0 rounded-0">
-                        <div className="text-end">
-                        </div>
-                        <div className="modal-body p-0">
-                            <div className="row">
-                                <div className="col-lg-6">
-                                    <div className="admin-picture-box">
-                                        <img src="/auth_banner.png" alt="" />
-                                    </div>
-                                </div>
-                                <div className="col-lg-6">
-                                    <div className="text-end pe-3 pt-3">
-                                        <button type="button" className="modal-close-btn text-black fz-18" data-bs-dismiss="modal" aria-label="Close">
-                                            <FontAwesomeIcon icon={faClose} />
-                                        </button>
-                                    </div>
-
-                                    <div className="login-container">
-                                        <div className="login-header-content">
-                                            <div className="lg_sub_content">
-                                                <h6>Secure Your Account</h6>
-                                                <h4>Set a new password to keep your learning safe.</h4>
-                                            </div>
-
-                                            <form action="">
-                                                <div className="custom-frm-bx">
-                                                    <input
-                                                        type="email"
-                                                        className="form-control profile-control pe-5"
-                                                        placeholder="Enter New Password"
-                                                    />
-                                                    <div className="pass-toggle-box">
-                                                        <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faEye} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div className="custom-frm-bx">
-                                                    <input
-                                                        type="email"
-                                                        className="form-control profile-control pe-5"
-                                                        placeholder="Confirm Password"
-                                                    />
-                                                    <div className="pass-toggle-box">
-                                                        <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faEye} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div className="my-4">
-                                                    <div>
-                                                        <button type="button" className="nw-thm-btn w-100" data-bs-toggle="modal" data-bs-target="#loginModal">Continue</button>
-                                                        <div className="my-3 text-center">
-                                                            <a href="#" className="card-back-btn" data-bs-toggle="modal" data-bs-target="#otpEmailModal" >Back</a>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-
-                                            </form>
-                                        </div>
-
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {/* Forgot Password End */}
 
 
 

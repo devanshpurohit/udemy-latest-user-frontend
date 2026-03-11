@@ -21,7 +21,7 @@ function Home() {
     const [courses, setCourses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    
+
 
     const splideRef1 = useRef(null);
     const splideRef3 = useRef(null);
@@ -38,20 +38,20 @@ function Home() {
         try {
             setLoading(true);
             console.log('🔍 Home: Fetching courses from API...');
-            
+
             // Test API connectivity
             const response = await fetch(getBackendUrl('/public/courses'));
             console.log('🔍 Home: Response status:', response.status);
             console.log('🔍 Home: Response ok:', response.ok);
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            
+
             const data = await response.json();
             console.log('🔍 Home: API Response:', data);
             console.log('🔍 Home: Courses data:', data.data);
-            
+
             if (data.success) {
                 setCourses(data.data);
                 console.log(`✅ Home: ${data.data.length} courses loaded`);
@@ -70,34 +70,34 @@ function Home() {
         }
     };
     const coursesPerPage = 4;
-     const [currentPage, setCurrentPage] = useState(0);
+    const [currentPage, setCurrentPage] = useState(0);
     //  const topLearningCourses = useMemo(() => courses, [courses]);
-        const continueLearningCourses = useMemo(() => courses, [courses]);
-        // const upcomingCourses = useMemo(() => courses, [courses]);
-    
-        // Pagination logic for Continue Learning section
-        const totalPages = Math.ceil(continueLearningCourses.length / coursesPerPage);
-        const startIndex = currentPage * coursesPerPage;
-        const endIndex = startIndex + coursesPerPage;
-        const currentCourses = continueLearningCourses.slice(startIndex, endIndex);
-    
-        const handleNextPage = () => {
-            if (currentPage < totalPages - 1) {
-                setCurrentPage(currentPage + 1);
-            }
-        };
-    
-        const handlePrevPage = () => {
-            if (currentPage > 0) {
-                setCurrentPage(currentPage - 1);
-            }
-        };
+    const continueLearningCourses = useMemo(() => courses, [courses]);
+    // const upcomingCourses = useMemo(() => courses, [courses]);
+
+    // Pagination logic for Continue Learning section
+    const totalPages = Math.ceil(continueLearningCourses.length / coursesPerPage);
+    const startIndex = currentPage * coursesPerPage;
+    const endIndex = startIndex + coursesPerPage;
+    const currentCourses = continueLearningCourses.slice(startIndex, endIndex);
+
+    const handleNextPage = () => {
+        if (currentPage < totalPages - 1) {
+            setCurrentPage(currentPage + 1);
+        }
+    };
+
+    const handlePrevPage = () => {
+        if (currentPage > 0) {
+            setCurrentPage(currentPage - 1);
+        }
+    };
 
 
 
     //  const splideRef1 = useRef(null);
     const splideRef2 = useRef(null);
-  
+
 
     const goPrev = () => {
         splideRef1.current?.splide.go("<");
@@ -135,9 +135,9 @@ function Home() {
                                 <h2>Simple, practical AI concepts designed for school students.</h2>
                                 <p>Explore the basics of AI through guided lessons and real examples.Learn how artificial intelligence is shaping the world around us.</p>
                                 <div className="d-flex gap-3 explore-signup-bx">
-                                <div>
-                                    <NavLink to="my-course" className='explore-btn'>Explore Courses</NavLink>
-                                </div>
+                                    <div>
+                                        <NavLink to="my-course" className='explore-btn'>Explore Courses</NavLink>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -177,200 +177,181 @@ function Home() {
                 </div>
             </section> */}
 
-                {/* Continue Learning Section */}
-                        <section className='top-learn-section'>
-                            <div className="container">
-                                <div className="row">
-                                    <div className='col-lg-12'>
-                                        <div className='udemy-learn-content'>
-                                            <h5> <span className='top-learn-title'>Top Learning</span> Courses </h5>
-                                            <div className='udemy-para-content'>
-                                                <p>Most popular courses for students.</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className='col-lg-12 mb-3'>
-                                      <div className="zs-splide-wrapper">
-    <Splide
-        ref={splideRef1}
-        options={{
-            type: "loop",
-            perPage: 1,
-            gap: "20px",
-            arrows: false,
-            pagination: false,
-            breakpoints: {
-                992: { perPage: 2 },
-                767: { perPage: 1 },
-                576: { perPage: 1 },
-            },
-        }}
-    >
-
-{loading ? (
-    <div className="text-center py-5 w-100 spiner-loader">
-                                            <div className="loader-course" role="status">
-                                                <span className=""></span>
-                                            </div>
-                                            <p className="mt-3">Loading courses...</p>
-                                        </div>
-) : error ? (
-    <div className="text-center py-5">
-        <div className="alert alert-danger">
-            <h4>Error loading courses</h4>
-            <p>{error}</p>
-            <button className="btn btn-primary" onClick={fetchCourses}>
-                Try Again
-            </button>
-        </div>
-    </div>
-) : courses.length === 0 ? (
-    <div className="text-center py-5">
-        <h3>No courses available</h3>
-        <p>Check back later for new courses.</p>
-    </div>
-) : (
-    <>
-        {currentCourses.map((course) => (
-            <SplideSlide key={course._id}>
-
-                <NavLink
-                    to={`/course/${course._id}`}
-                    className="text-decoration-none"
-                >
-
-                    <div className="udemy-cards">
-                        <div className='row'>
-                            
-                            <div className='col-lg-6'>
-                                <div className="udemy-picture top-udemy-picture">
-                                <img
-                                    src={
-                                        course.courseImage
-                                            ? course.courseImage
-                                            : "/course_01.png"
-                                    }
-                                    alt={course.title}
-                                />
-
-                                <div className="udemy-category-box">
-                                    <span className="udemy-seller">Best Seller</span>
-                                    <span className="udemy-offer">20% OFF</span>
+            {/* Continue Learning Section */}
+            <section className='top-learn-section'>
+                <div className="container">
+                    <div className="row">
+                        <div className='col-lg-12'>
+                            <div className='udemy-learn-content'>
+                                <h5> <span className='top-learn-title'>Top Learning</span> Courses </h5>
+                                <div className='udemy-para-content'>
+                                    <p>Most popular courses for students.</p>
                                 </div>
                             </div>
-
-                            </div>
-
-                            <div className='col-lg-6'>
-                                <div className="udemy-content mt-0 top-udemy-content-box">
-
-                                <div className='udemy-course-list top-course-list-box'>
-
-                                    <div className='udemy-course-top '>
-
-                                        <h4>{course.title}</h4>
-
-                                        <span className="pb-2">
-                                            <FontAwesomeIcon
-                                                icon={faUser}
-                                                className="udemy-course-icon"
-                                            />
-
-                                            <a className="udemy-user">
-                                                {course.instructor?.username || "Admin"}
-                                            </a>
-                                        </span>
-
-                                        <p>
-                                            {course.description?.slice(0, 90)}...
-                                        </p>
-
-                                    </div>
-
-                                    <div className='udemy-course-bottom'>
-
-                                        <div className='udemy-certificate-content'>
-                                            <h6>
-
-                                                <span className='fz-24'>
-                                                    <BiSolidBadgeCheck />
-                                                </span>
-
-                                                Certificate Guarantee
-
-                                            </h6>
-                                        </div>
-
-                                        <ul className="rating-list">
-
-                                            <li className="rating-item">
-                                                <FontAwesomeIcon icon={faStar} className='rating-text'/>
-                                            </li>
-
-                                            <li className="rating-item">
-                                                <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                            </li>
-
-                                            <li className="rating-item">
-                                                <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                            </li>
-
-                                            <li className="rating-item">
-                                                <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                            </li>
-
-                                            <li className="rating-item">
-                                                <FontAwesomeIcon icon={faStarHalf} className='rating-text' />
-                                            </li>
-
-                                            <li className="rating-item">
-                                                <span className="rating-number">(1.2K)</span>
-                                            </li>
-
-                                        </ul>
-
-                                        <div className="udemy-course-price">
-
-                                            <h5>
-                                                ${course.price}
-
-                                                {course.originalPrice && (
-                                                    <del className="udemy-sale">
-                                                        ${course.originalPrice}
-                                                    </del>
-                                                )}
-
-                                            </h5>
-
-                                        </div>
-
-                                    </div>
-
-                                </div>
-
-                            </div>
-
-                            </div>
-
-                            
-
-                            
-
                         </div>
-                    </div>
 
-                </NavLink>
+                        <div className='col-lg-12 mb-3'>
+                            {loading ? (
+                                <div className="text-center py-5 w-100 spiner-loader">
+                                    <div className="loader-course" role="status">
+                                        <span className=""></span>
+                                    </div>
+                                    <p className="mt-3">Loading courses...</p>
+                                </div>
+                            ) : error ? (
+                                <div className="text-center py-5">
+                                    <div className="alert alert-danger">
+                                        <h4>Error loading courses</h4>
+                                        <p>{error}</p>
+                                        <button className="btn btn-primary" onClick={fetchCourses}>
+                                            Try Again
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : courses.length === 0 ? (
+                                <div className="text-center py-5">
+                                    <h3>No courses available</h3>
+                                    <p>Check back later for new courses.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {currentCourses.map((course) => (
+                                        <SplideSlide key={course._id}>
 
-            </SplideSlide>
-        ))}
-    </>
-)}
+                                            <NavLink
+                                                to={`/course/${course._id}`}
+                                                className="text-decoration-none"
+                                            >
 
-    </Splide>
-                                        </div>
+                                                <div className="udemy-cards mb-3">
+                                                    <div className='row'>
 
-                                        {/* {loading ? (
+                                                        <div className='col-lg-6'>
+                                                            <div className="udemy-picture top-udemy-picture">
+                                                                <img
+                                                                    src={
+                                                                        course.courseImage
+                                                                            ? course.courseImage
+                                                                            : "/course_01.png"
+                                                                    }
+                                                                    alt={course.title}
+                                                                />
+
+                                                                <div className="udemy-category-box">
+                                                                    <span className="udemy-seller">Best Seller</span>
+                                                                    <span className="udemy-offer">20% OFF</span>
+                                                                </div>
+                                                            </div>
+
+                                                        </div>
+
+                                                        <div className='col-lg-6'>
+                                                            <div className="udemy-content mt-0 top-udemy-content-box">
+
+                                                                <div className='udemy-course-list top-course-list-box'>
+
+                                                                    <div className='udemy-course-top '>
+
+                                                                        <h4>{course.title}</h4>
+
+                                                                        <span className="pb-2">
+                                                                            <FontAwesomeIcon
+                                                                                icon={faUser}
+                                                                                className="udemy-course-icon"
+                                                                            />
+
+                                                                            <a className="udemy-user">
+                                                                                {course.instructor?.username || "Admin"}
+                                                                            </a>
+                                                                        </span>
+
+                                                                        <p>
+                                                                            {course.description?.slice(0, 90)}...
+                                                                        </p>
+
+                                                                    </div>
+
+                                                                    <div className='udemy-course-bottom'>
+
+                                                                        <div className='udemy-certificate-content'>
+                                                                            <h6>
+
+                                                                                <span className='fz-24'>
+                                                                                    <BiSolidBadgeCheck />
+                                                                                </span>
+
+                                                                                Certificate Guarantee
+
+                                                                            </h6>
+                                                                        </div>
+
+                                                                        <ul className="rating-list">
+
+                                                                            <li className="rating-item">
+                                                                                <FontAwesomeIcon icon={faStar} className='rating-text' />
+                                                                            </li>
+
+                                                                            <li className="rating-item">
+                                                                                <FontAwesomeIcon icon={faStar} className='rating-text' />
+                                                                            </li>
+
+                                                                            <li className="rating-item">
+                                                                                <FontAwesomeIcon icon={faStar} className='rating-text' />
+                                                                            </li>
+
+                                                                            <li className="rating-item">
+                                                                                <FontAwesomeIcon icon={faStar} className='rating-text' />
+                                                                            </li>
+
+                                                                            <li className="rating-item">
+                                                                                <FontAwesomeIcon icon={faStarHalf} className='rating-text' />
+                                                                            </li>
+
+                                                                            <li className="rating-item">
+                                                                                <span className="rating-number">(1.2K)</span>
+                                                                            </li>
+
+                                                                        </ul>
+
+                                                                        <div className="udemy-course-price">
+
+                                                                            <h5>
+                                                                                ${course.price}
+
+                                                                                {course.originalPrice && (
+                                                                                    <del className="udemy-sale">
+                                                                                        ${course.originalPrice}
+                                                                                    </del>
+                                                                                )}
+
+                                                                            </h5>
+
+                                                                        </div>
+
+                                                                    </div>
+
+                                                                </div>
+
+                                                            </div>
+
+                                                        </div>
+
+
+
+
+
+                                                    </div>
+                                                </div>
+
+                                            </NavLink>
+
+                                        </SplideSlide>
+                                    ))}
+                                </>
+                            )}
+
+
+                            {/* {loading ? (
                                             <div className="text-center py-5">
                                                 <div className="spinner-border text-primary" role="status">
                                                     <span className="visually-hidden">Loading courses...</span>
@@ -552,206 +533,14 @@ function Home() {
                                                 )}
                                             </>
                                         )} */}
-                                    </div>
-
-                                    <div className='col-lg-12'>
-                                           <div className="zs-splide-wrapper">
-                                        <Splide
-                                            ref={splideRef2}
-                                            options={{
-                                                type: "loop",
-                                                perPage: 1,
-                                                gap: "20px",
-                                                arrows: false,
-                                                pagination: false,
-                                                breakpoints: {
-                                                    992: { perPage: 2 },
-                                                    576: { perPage: 1 },
-                                                },
-                                            }}
-                                        >
-
-                                    {loading ? (
-                                        <div className="text-center py-5 w-100 spiner-loader">
-                                            <div className="loader-course" role="status">
-                                                <span className=""></span>
-                                            </div>
-                                            <p className="mt-3">Loading courses...</p>
-                                        </div>
-                                    ) : error ? (
-                                        <div className="text-center py-5">
-                                            <div className="alert alert-danger">
-                                                <h4>Error loading courses</h4>
-                                                <p>{error}</p>
-                                                <button className="thm-btn" onClick={fetchCourses}>
-                                                    Try Again
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : courses.length === 0 ? (
-                                        <div className="text-center py-5">
-                                            <h3>No courses available</h3>
-                                            <p>Check back later for new courses.</p>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            {currentCourses.map((course) => (
-                                                <SplideSlide key={course._id}>
-
-                                                    <NavLink
-                                                        to={`/course/${course._id}`}
-                                                        className="text-decoration-none"
-                                                    >
-
-                                                        <div className="udemy-cards">
-                                                            <div className='row'>
-                                                                <div className='col-lg-6'>
-                                                                    <div className="udemy-picture top-udemy-picture">
-                                                                    <img
-                                                                        src={
-                                                                            course.courseImage
-                                                                                ? course.courseImage
-                                                                                : "/course_01.png"
-                                                                        }
-                                                                        alt={course.title}
-                                                                    />
-
-                                                                    <div className="udemy-category-box">
-                                                                        <span className="udemy-seller">Best Seller</span>
-                                                                        <span className="udemy-offer">20% OFF</span>
-                                                                    </div>
-                                                                </div>
-
-                                                                </div>
-
-                                                                <div className='col-lg-6'>
-                                                                    <div className="udemy-content mt-0 top-udemy-content-box">
-
-                                                                    <div className='udemy-course-list  top-course-list-box'>
-
-                                                                        <div className='udemy-course-top'>
-
-                                                                            <h4>{course.title}</h4>
-
-                                                                            <span className="pb-2">
-                                                                                <FontAwesomeIcon
-                                                                                    icon={faUser}
-                                                                                    className="udemy-course-icon"
-                                                                                />
-
-                                                                                <a className="udemy-user">
-                                                                                    {course.instructor?.username || "Admin"}
-                                                                                </a>
-                                                                            </span>
-
-                                                                            <p>
-                                                                                {course.description?.slice(0, 90)}...
-                                                                            </p>
-
-                                                                        </div>
-
-                                                                        <div className='udemy-course-bottom'>
-
-                                                                            <div className='udemy-certificate-content'>
-                                                                                <h6>
-
-                                                                                    <span className='fz-24'>
-                                                                                        <BiSolidBadgeCheck />
-                                                                                    </span>
-
-                                                                                    Certificate Guarantee
-
-                                                                                </h6>
-                                                                            </div>
-
-                                                                            <ul className="rating-list">
-
-                                                                                <li className="rating-item">
-                                                                                    <FontAwesomeIcon icon={faStar} className='rating-text'/>
-                                                                                </li>
-
-                                                                                <li className="rating-item">
-                                                                                    <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                                                                </li>
-
-                                                                                <li className="rating-item">
-                                                                                    <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                                                                </li>
-
-                                                                                <li className="rating-item">
-                                                                                    <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                                                                </li>
-
-                                                                                <li className="rating-item">
-                                                                                    <FontAwesomeIcon icon={faStarHalf} className='rating-text' />
-                                                                                </li>
-
-                                                                                <li className="rating-item">
-                                                                                    <span className="rating-number">(1.2K)</span>
-                                                                                </li>
-
-                                                                            </ul>
-
-                                                                            <div className="udemy-course-price">
-
-                                                                                <h5>
-                                                                                    ${course.price}
-
-                                                                                    {course.originalPrice && (
-                                                                                        <del className="udemy-sale">
-                                                                                            ${course.originalPrice}
-                                                                                        </del>
-                                                                                    )}
-
-                                                                                </h5>
-
-                                                                            </div>
-
-                                                                        </div>
-
-                                                                    </div>
-
-                                                                </div>
-
-                                                                </div>
-
-                                                                
-
-                                                                
-
-                                                            </div>
-                                                        </div>
-
-                                                    </NavLink>
-
-                                                </SplideSlide>
-                                            ))}
-                                        </>
-                                    )}
+                        </div>
 
 
 
-                                        </Splide>
-
-                                    <div className="zs-bottom-arrows">
-                                                                    <button className="zs-arrow-btn" onClick={goPrev}>
-                                                                        <FaArrowLeft />
-                                                                    </button>
-
-                                                                    <button className="zs-arrow-btn" onClick={goNext}>
-                                                                        <FaArrowRight />
-                                                                    </button>
-                                                                </div>
-                                        </div>
-
-                                    </div>
-
-                                    <div className='text-center top-more-course'>
-                                        <button className='nw-thm-btn'>More</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
+                      
+                    </div>
+                </div>
+            </section>
 
             <section className='explore-category-section'>
                 <div className="container">
@@ -796,9 +585,7 @@ function Home() {
                                 </div>
                             </div>
                         </div>
-                        <div className='text-center top-more-course'>
-                            <button className='nw-thm-btn'>More</button>
-                        </div>
+                      
                     </div>
                 </div>
             </section>
@@ -899,7 +686,7 @@ function Home() {
                             </div>
                         </div>
                         <div className='col-lg-12'>
-                            <UpcomingSlider 
+                            <UpcomingSlider
                                 upcomingCourses={upcomingCourses}
                                 loading={loading}
                                 error={error}
@@ -907,9 +694,7 @@ function Home() {
                                 splideRef={splideRef3}
                             />
                         </div>
-                        <div className='text-center top-more-course'>
-                            <button className='nw-thm-btn'>More</button>
-                        </div>
+                       
                     </div>
                 </div>
             </section>
