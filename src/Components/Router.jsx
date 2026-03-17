@@ -154,6 +154,10 @@ function Router() {
                     element: <ProtectedRoute><QuizPreview /></ProtectedRoute>,
                 },
                 {
+                    path: "/quiz-preview/:courseId/:lessonId",
+                    element: <ProtectedRoute><QuizPreview /></ProtectedRoute>,
+                },
+                {
                     path: "/home-second",
                     element: <HomeSecond />,
                 },

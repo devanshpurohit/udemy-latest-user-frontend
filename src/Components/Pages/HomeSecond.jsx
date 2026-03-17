@@ -31,7 +31,7 @@ const HomeSecond = () => {
     // Memoize course slices to prevent unnecessary recalculations
     const topLearningCourses = useMemo(() => courses, [courses]);
     const continueLearningCourses = useMemo(() => courses, [courses]);
-    const upcomingCourses = useMemo(() => courses, [courses]);
+    const upcomingCourses = useMemo(() => courses.slice(0, 4), [courses]);
 
     // Pagination logic for Continue Learning section
     const totalPages = Math.ceil(continueLearningCourses.length / coursesPerPage);
@@ -437,6 +437,10 @@ const HomeSecond = () => {
 
                                 </div>
                             ))}
+
+                            <div className='text-center top-more-course mt-4'>
+                                <NavLink to="/my-course" className='nw-thm-btn'>Show More</NavLink>
+                            </div>
 
                             {/* {loading ? (
                                             <div className="text-center py-5">
@@ -972,9 +976,9 @@ const HomeSecond = () => {
                                 splideRef={splideRef3}
                             />
                         </div>
-                        {/* <div className='text-center top-more-course'>
-                            <button className='nw-thm-btn'>More</button>
-                        </div> */}
+                        <div className='text-center top-more-course mt-4'>
+                            <NavLink to="/my-course" className='nw-thm-btn'>Show More</NavLink>
+                        </div>
                     </div>
                 </div>
             </section>

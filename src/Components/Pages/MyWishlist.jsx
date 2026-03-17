@@ -15,7 +15,7 @@ function MyWishlist() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
-    const coursesPerPage = 6;
+    const coursesPerPage = 8;
 
     // Pagination logic
     const totalPages = Math.ceil(courses.length / coursesPerPage);
@@ -25,6 +25,7 @@ function MyWishlist() {
 
     const handlePageChange = (page) => {
         setCurrentPage(page);
+        window.scrollTo({ top: 300, behavior: 'smooth' });
     };
 
     const fetchWishlistCourses = async () => {
@@ -184,50 +185,52 @@ function MyWishlist() {
                         )}
                     </div>
 
-                    <div className="row">
-                        <div className="col-lg-12">
-                            <div className="dz-pagination-wrapper">
-                                <div className="dz-pagination-info">
-                                    <p>Showing {startIndex + 1} to {Math.min(endIndex, courses.length)} of {courses.length} results</p>
-                                </div>
+                    {totalPages > 1 && (
+                        <div className="row">
+                            <div className="col-lg-12">
+                                <div className="dz-pagination-wrapper">
+                                    <div className="dz-pagination-info">
+                                        <p>Showing {startIndex + 1} to {Math.min(endIndex, courses.length)} of {courses.length} results</p>
+                                    </div>
 
-                                <nav>
-                                    <ul className="pagination dz-custom-pagination mb-0">
-                                        <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                                            <button 
-                                                className="page-link dz-page-link" 
-                                                onClick={() => handlePageChange(currentPage - 1)}
-                                                disabled={currentPage === 1}
-                                            >
-                                                <MdChevronLeft />
-                                            </button>
-                                        </li>
-
-                                        {[...Array(totalPages)].map((_, index) => (
-                                            <li key={index} className={`page-item ${currentPage === index + 1 ? 'active' : ''}`}>
+                                    <nav>
+                                        <ul className="pagination dz-custom-pagination mb-0">
+                                            <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
                                                 <button 
                                                     className="page-link dz-page-link" 
-                                                    onClick={() => handlePageChange(index + 1)}
+                                                    onClick={() => handlePageChange(currentPage - 1)}
+                                                    disabled={currentPage === 1}
                                                 >
-                                                    {index + 1}
+                                                    <MdChevronLeft />
                                                 </button>
                                             </li>
-                                        ))}
 
-                                        <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                                            <button 
-                                                className="page-link dz-page-link" 
-                                                onClick={() => handlePageChange(currentPage + 1)}
-                                                disabled={currentPage === totalPages}
-                                            >
-                                                <MdChevronRight />
-                                            </button>
-                                        </li>
-                                    </ul>
-                                </nav>
+                                            {[...Array(totalPages)].map((_, index) => (
+                                                <li key={index} className={`page-item ${currentPage === index + 1 ? 'active' : ''}`}>
+                                                    <button 
+                                                        className="page-link dz-page-link" 
+                                                        onClick={() => handlePageChange(index + 1)}
+                                                    >
+                                                        {index + 1}
+                                                    </button>
+                                                </li>
+                                            ))}
+
+                                            <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                                                <button 
+                                                    className="page-link dz-page-link" 
+                                                    onClick={() => handlePageChange(currentPage + 1)}
+                                                    disabled={currentPage === totalPages}
+                                                >
+                                                    <MdChevronRight />
+                                                </button>
+                                            </li>
+                                        </ul>
+                                    </nav>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             </section>
         </>

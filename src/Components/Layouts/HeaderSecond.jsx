@@ -11,9 +11,15 @@ import { FiLogOut } from "react-icons/fi";
 import { isLoggedIn, getStoredUser, logout, login as authLogin, forgotPassword as authForgotPassword, verifyOtp as authVerifyOtp, resetPassword as authResetPassword } from "../../services/authService";
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocation } from "react-router-dom";
+import config from "../../config/config";
+import announcementService from "../../services/announcementService";
+import { useSocket } from "../../contexts/SocketContext";
+import { IoIosNotifications } from "react-icons/io";
+import { useSettings } from "../../contexts/SettingsContext";
 
 
 const HeaderSecond = () => {
+    const { settings } = useSettings();
     const [menuOpen, setMenuOpen] = useState(false);
     const [catOpen, setCatOpen] = useState(false);
     const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -22,6 +28,12 @@ const HeaderSecond = () => {
     const navigate = useNavigate();
     const { logout: authLogout, user: authUser, isAuthenticated } = useAuth();
     const location = useLocation();
+    const socket = useSocket();
+
+    // Announcement State
+    const [announcements, setAnnouncements] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
 
     // Forgot Password State
     const [forgotEmail, setForgotEmail] = useState('');
@@ -203,6 +215,64 @@ useEffect(() => {
             setUser(authUser);
         }
     }, [isAuthenticated, authUser]);
+
+    // Fetch announcements and unread count
+    const fetchAnnouncementsData = async () => {
+        if (!isAuthenticated) return;
+        setLoadingAnnouncements(true);
+        try {
+            const [annRes, countRes] = await Promise.all([
+                announcementService.getAnnouncements(),
+                announcementService.getUnreadCount()
+            ]);
+            
+            console.log('📢 Announcements:', annRes.data);
+            console.log('📢 Unread Count:', countRes.data);
+
+            if (annRes.success && annRes.data?.data?.announcements) {
+                setAnnouncements(annRes.data.data.announcements);
+            } else if (annRes.success && annRes.data?.announcements) {
+                setAnnouncements(annRes.data.announcements);
+            }
+
+            if (countRes.success && countRes.data?.data?.unreadCount !== undefined) {
+                setUnreadCount(countRes.data.data.unreadCount);
+            } else if (countRes.success && countRes.data?.unreadCount !== undefined) {
+                setUnreadCount(countRes.data.unreadCount);
+            }
+        } catch (err) {
+            console.error('Error fetching announcements:', err);
+        } finally {
+            setLoadingAnnouncements(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchAnnouncementsData();
+        // Removed polling in favor of WebSockets
+    }, [isAuthenticated]);
+
+    useEffect(() => {
+        if (socket) {
+            socket.on('newAnnouncement', (data) => {
+                console.log('📢 Real-time announcement received:', data);
+                fetchAnnouncementsData();
+            });
+            return () => socket.off('newAnnouncement');
+        }
+    }, [socket]);
+
+    const handleMarkAllRead = async () => {
+        try {
+            const res = await announcementService.markAllAsRead();
+            if (res.success) {
+                setUnreadCount(0);
+                // Optionally refresh listing to show them as read locally if we have UI for that
+            }
+        } catch (err) {
+            console.error('Error marking all as read:', err);
+        }
+    };
 
 
 
@@ -387,7 +457,7 @@ useEffect(() => {
 
                         <NavLink className="navbar-brand me-0" to="/">
 
-                            <img src="/Logo.png" alt="Logo" className="logo-img" />
+                            <img src={settings.logoUrl || "/Logo.png"} alt={settings.siteName || "Logo"} className="logo-img" />
 
                         </NavLink>
 
@@ -421,7 +491,7 @@ useEffect(() => {
 
                                 <li className="nav-item">
 
-                                    <NavLink to="/" className="nav-link" onClick={closeMenu}>
+                                    <NavLink to="/" end className="nav-link" onClick={closeMenu}>
 
                                         Home
 
@@ -491,19 +561,55 @@ useEffect(() => {
                                                     <div className="dropdown">
                                                         <a
                                                             href="#"
-                                                            className="nw-custom-btn"
-                                                            id="acticonMenu"
+                                                            className="nw-custom-btn position-relative tp-bell-icon"
+                                                            id="notificationDropdown"
                                                             data-bs-toggle="dropdown"
                                                             aria-expanded="false"
+                                                            onClick={handleMarkAllRead}
                                                         >
+                                                            <IoIosNotifications className="fz-24" />
+                                                            {unreadCount > 0 && (
+                                                                <div className="bell-nw-icon-alrt">
+                                                                    <span className="bell-title">{unreadCount}</span>
+                                                                </div>
+                                                            )}
+                                                        </a>
 
-                                                            <FontAwesomeIcon icon={faBell} />
-
-                                                            <div className="cart-box">
-                                                                <span className="cart-title">1</span>
+                                                        <ul className="dropdown-menu dropdown-menu-end notification-card p-0" aria-labelledby="notificationDropdown">
+                                                            <div className="notification-header text-start">
+                                                                <h6 className="lg_title mb-0">Notifications</h6>
                                                             </div>
 
-                                                        </a>
+                                                            <div className="notification-content custom-scrollbar">
+                                                                {loadingAnnouncements ? (
+                                                                    <div className="text-center py-4">
+                                                                        <div className="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                                                    </div>
+                                                                ) : (announcements || []).length > 0 ? (
+                                                                    announcements.map((ann) => (
+                                                                        <div key={ann._id} className="notification-parent-bx text-start">
+                                                                            <div>
+                                                                                <span className="notification-icon"><IoBook /> </span>
+                                                                            </div>
+                                                                            <div className="flex-grow-1">
+                                                                                <p className="mb-1">{ann.title}: {ann.content}</p>
+                                                                                <h6>{new Date(ann.createdAt).toLocaleDateString()}</h6>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))
+                                                                ) : (
+                                                                    <div className="text-center py-4 text-muted">
+                                                                        No announcements.
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            <div className="notification-footer">
+                                                                <div className="text-center">
+                                                                    <button className="thm-btn w-100 py-2" onClick={() => navigate('/my-dashboard')}>See Dashboard</button>
+                                                                </div>
+                                                            </div>
+                                                        </ul>
                                                     </div>
                                                 </div>
                                             </div>
@@ -531,19 +637,34 @@ useEffect(() => {
                                                 }}
                                             >
                                                 <div className="admn-icon me-2">
-                                                    {user?.profile?.profileImage ? (
-                                                        <img
-                                                            src={
-                                                                user.profile.profileImage.startsWith("data:")
-                                                                    ? user.profile.profileImage
-                                                                    : `${user.profile.profileImage}?t=${Date.now()}`
+                                                    {(() => {
+                                                        const rawImage = user?.profile?.profileImage;
+                                                        const defaultAvatar = "/boy.png";
+                                                        
+                                                        if (!rawImage || rawImage.includes('picsum.photos')) {
+                                                            return <img src={defaultAvatar} alt="Default Avatar" />;
+                                                        }
+
+                                                        let imageUrl = defaultAvatar;
+                                                        if (rawImage && !rawImage.includes('picsum.photos')) {
+                                                            if (rawImage.includes('boy.png')) {
+                                                                imageUrl = defaultAvatar;
+                                                            } else if (rawImage.startsWith("data:") || rawImage.startsWith("http")) {
+                                                                imageUrl = rawImage;
+                                                            } else {
+                                                                const baseUrl = config?.API_BASE_URL?.replace('/api', '') || ''; 
+                                                                imageUrl = `${baseUrl}${rawImage.startsWith('/') ? '' : '/'}${rawImage}`;
                                                             }
-                                                        />
-                                                    ) : (
-                                                        <div className="generic-user-icon">
-                                                            <FontAwesomeIcon icon={faUser} />
-                                                        </div>
-                                                    )}
+                                                        }
+                                                        
+                                                        const finalUrl = imageUrl || defaultAvatar;
+                                                        const src = (finalUrl && finalUrl.startsWith('data:')) 
+                                                                    ? finalUrl 
+                                                                    : (finalUrl === defaultAvatar) 
+                                                                        ? finalUrl 
+                                                                        : `${finalUrl}${finalUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+                                                        return <img src={src} alt="Profile" />;
+                                                    })()}
                                                 </div>
 
                                                 <div className="profile-info me-1">
@@ -2087,6 +2208,7 @@ useEffect(() => {
             </div>
 
             {/* Forgot Password End */}
+
 
 
 

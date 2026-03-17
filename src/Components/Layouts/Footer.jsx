@@ -1,10 +1,48 @@
+import React, { useState } from "react";
 import { FaPhoneAlt, FaMapMarkerAlt, FaFacebookF, FaInstagram, FaYoutube, FaTiktok, FaLinkedinIn } from "react-icons/fa";
 import { NavLink } from "react-router-dom";
 import { FiTwitter } from "react-icons/fi";
+import { useSettings } from "../../contexts/SettingsContext";
+import { useAuth } from "../../contexts/AuthContext";
+import axios from "axios";
+import { toast } from "react-toastify";
 
 
 
 function Footer() {
+    const { settings } = useSettings();
+    const { user } = useAuth();
+    const [email, setEmail] = useState("");
+    const [loading, setLoading] = useState(false);
+
+    const handleSubscribe = async () => {
+        if (!email) {
+            toast.error("Please enter email address");
+            return;
+        }
+
+        if (!user || email !== user.email) {
+            toast.error("please enter your login mail");
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5002/api';
+            const response = await axios.post(`${apiUrl}/newsletter/subscribe`, { email });
+            
+            if (response.data.success) {
+                toast.success(response.data.message || "Subscribed successfully!");
+                setEmail("");
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error(error.response?.data?.message || "Failed to subscribe");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <>
             <footer className="footer-section">
@@ -12,12 +50,12 @@ function Footer() {
                     <div className="row">
                         <div className="col-lg-4 col-md-6 col-sm-12 mb-4">
                             <div className="d-flex align-items-center mb-3">
-                                <a href="#"><img src="/white-Logo.png" alt="" className="footer-logo" /></a>
+                                <a href="#"><img src={settings.logoUrl || "/white-Logo.png"} alt={settings.siteName || "Logo"} className="footer-logo" /></a>
                             </div>
 
                             <div className="footer-text">
                                 <p>
-                                    We are committed to delivering clear, reliable, and student-friendly educational content through structured digital courses.
+                                    {settings.footerContent || "We are committed to delivering clear, reliable, and student-friendly educational content through structured digital courses."}
                                 </p>
                             </div>
 
@@ -36,8 +74,7 @@ function Footer() {
                             <h5 className="sub-title">Quick company</h5>
                             <ul className="footer-links">
                                 <li className="footer-item"> <NavLink to="/" className="footer-nav-link">Home</NavLink></li>
-                                <li className="footer-item"> <NavLink to="#" className="footer-nav-link">Categories</NavLink> </li>
-                                <li className="footer-item"> <NavLink to="/my-course" className="footer-nav-link">Courses</NavLink> </li>
+                            <li className="footer-item"> <NavLink to="/my-course" className="footer-nav-link">Courses</NavLink> </li>
 
                             </ul>
                         </div>
@@ -67,10 +104,22 @@ function Footer() {
 
                                 <div className="email-footer-box">
                                     <div className="custom-frm-bx">
-                                        <input type="text" name="" id="" className="form-control email-frm-control" placeholder="Your email address" />
+                                        <input 
+                                            type="email" 
+                                            className="form-control email-frm-control" 
+                                            placeholder="Your email address" 
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                        />
 
                                         <div className="email-footer-send-box">
-                                            <button className="email-ftr-btn">Send</button>
+                                            <button 
+                                                className="email-ftr-btn" 
+                                                onClick={handleSubscribe}
+                                                disabled={loading}
+                                            >
+                                                {loading ? "..." : "Send"}
+                                            </button>
 
                                         </div>
 
@@ -86,7 +135,7 @@ function Footer() {
                 </div>
 
                 <div className="footer-bottom">
-                    <p className=" mb-0">© Copyright AI @2026</p>
+                    <p className=" mb-0">© Copyright {settings.siteName || "AI"} @2026</p>
                 </div>
 
             </footer>

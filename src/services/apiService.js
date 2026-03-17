@@ -197,6 +197,27 @@ export const getDashboardData = async () => {
     }
 };
 
+// Submit quiz score (protected)
+export const submitQuizScore = async (courseId, lessonId, score) => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/users/quiz-score`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ courseId, lessonId, score })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            return { success: true, message: data.message };
+        } else {
+            return { success: false, error: data.message || 'Failed to submit quiz score' };
+        }
+    } catch (error) {
+        console.error('Submit quiz score error:', error);
+        return { success: false, error: 'Network error. Please try again.' };
+    }
+};
+
 // Authentication services
 export const loginUser = async (username, password) => {
     try {

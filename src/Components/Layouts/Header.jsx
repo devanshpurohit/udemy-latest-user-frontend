@@ -7,12 +7,14 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { BsCreditCardFill } from "react-icons/bs";
 import { IoInformationCircle } from "react-icons/io5";
 import { useAuth } from '../../contexts/AuthContext';
-import { login, forgotPassword as authForgotPassword, verifyOtp as authVerifyOtp, resetPassword as authResetPassword, verifyAICard, register as authRegister } from '../../services/authService';
+import { login, forgotPassword as authForgotPassword, resendOTP as authResendOtp, verifyOtp as authVerifyOtp, resetPassword as authResetPassword, verifyAICard, register as authRegister } from '../../services/authService';
+import { useSettings } from "../../contexts/SettingsContext";
 
 
 
 const Header = () => {
     const { isAuthenticated, user, logout: authLogout, login: authLogin } = useAuth();
+    const { settings } = useSettings();
     const [menuOpen, setMenuOpen] = useState(false);
     const [catOpen, setCatOpen] = useState(false);
     const [username, setUsername] = useState('');
@@ -20,6 +22,8 @@ const Header = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+
+
     const [forgotEmail, setForgotEmail] = useState('');
     const [forgotOTP, setForgotOTP] = useState(['', '', '', '']);
     const [forgotNewPassword, setForgotNewPassword] = useState('');
@@ -330,6 +334,37 @@ const Header = () => {
         }
     };
 
+    const handleResendOtp = async () => {
+        const email = regEmail || forgotEmail;
+        if (!email) {
+            toast.error("Email not found. Please start again.");
+            return;
+        }
+
+        setRegLoading(true);
+        setForgotLoading(true);
+        setRegError('');
+        setForgotError('');
+
+        try {
+            const result = await authResendOtp(email);
+            if (result.success) {
+                toast.success("New OTP sent successfully!");
+                // Optionally start a timer here
+            } else {
+                const errMsg = result.error || "Failed to resend OTP";
+                if (regEmail) setRegError(errMsg);
+                else setForgotError(errMsg);
+                toast.error(errMsg);
+            }
+        } catch (err) {
+            toast.error("An error occurred. Please try again.");
+        } finally {
+            setRegLoading(false);
+            setForgotLoading(false);
+        }
+    };
+
     const hideModal = (id) => {
         const modalEl = document.getElementById(id);
         if (modalEl) {
@@ -419,7 +454,7 @@ const Header = () => {
                     className="navbar navbar-expand-lg navbar-light-box">
                     <div className="container">
                         <NavLink className="navbar-brand me-0" to="/">
-                            <img src="/Logo.png" alt="Logo" className="logo-img" />
+                            <img src={settings.logoUrl || "/Logo.png"} alt={settings.siteName || "Logo"} className="logo-img" />
                         </NavLink>
 
                         <button className="navbar-toggler" type="button" onClick={toggleMenu}>
@@ -436,7 +471,7 @@ const Header = () => {
 
                             <ul className="navbar-nav mx-auto mb-2 navbar-menu-list">
                                 <li className="nav-item">
-                                    <NavLink to="/" className="nav-link" onClick={closeMenu}>
+                                    <NavLink to="/" end className="nav-link" onClick={closeMenu}>
                                         Home
                                     </NavLink>
                                 </li>
@@ -521,7 +556,7 @@ const Header = () => {
                                     <div className="login-container">
                                         <div className="login-header-content">
                                             <div className="lg_sub_content">
-                                                <h4>Log in to your websitename Account</h4>
+                                                <h4>Log in to your {settings.siteName || "websitename"} Account</h4>
                                             </div>
 
                                             <form onSubmit={handleLogin}>
@@ -716,7 +751,7 @@ const Header = () => {
                                     <div className="login-container">
                                         <div className="login-header-content">
                                             <div className="lg_sub_content">
-                                                <h4>Register to your website name Account</h4>
+                                                <h4>Register to your {settings.siteName || "website name"} Account</h4>
                                             </div>
 
                                             <form onSubmit={handleCardVerify}>
@@ -1004,7 +1039,7 @@ const Header = () => {
 
                                                     <div className="udemy-tp-line border-top-0">
 
-                                                        <p>Didn't receive the code? <button type="button" onClick={handleForgotPassword} className="udemy-back-login border-0 bg-transparent">Resend</button> </p>
+                                                        <p>Didn't receive the code? <button type="button" onClick={handleResendOtp} className="udemy-back-login border-0 bg-transparent">Resend</button> </p>
                                                     </div>
 
                                                 </div>

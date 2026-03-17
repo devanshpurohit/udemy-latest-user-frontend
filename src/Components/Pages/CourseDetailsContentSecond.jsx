@@ -193,6 +193,15 @@ function CourseDetailsContentSecond({ course: propCourse }) {
         return course.sections.reduce((total, section) => total + (section.lessons?.length || 0), 0);
     };
 
+    const getTotalQuizzes = () => {
+        if (!course?.sections) return 0;
+        return course.sections.reduce((total, section) => {
+            return total + (section.lessons?.reduce((lessonTotal, lesson) => {
+                return lessonTotal + (lesson.quizzes?.length || 0);
+            }, 0) || 0);
+        }, 0);
+    };
+
     // Get all lessons for pagination
     const getAllLessonsForPagination = () => {
         if (!course?.sections) return [];
@@ -530,7 +539,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                 </li>
 
                                                 <li className="breadcrumb-item">
-                                                    <NavLink to="/courses" className="breadcrumb-link">
+                                                    <NavLink to="/my-course" className="breadcrumb-link">
                                                         Course
                                                     </NavLink>
                                                 </li>
@@ -817,7 +826,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                                 </span>
                                                                 <div className="bid-about-content">
                                                                     <p>Lessons</p>
-                                                                    <h6>{course?.lessons?.length || 153}</h6>
+                                                                    <h6>{getTotalLessons()}</h6>
                                                                 </div>
                                                             </div>
                                                             <div className="bid-grid-box">
@@ -826,7 +835,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                                 </span>
                                                                 <div className="bid-about-content">
                                                                     <p>Quizzes</p>
-                                                                    <h6>5</h6>
+                                                                    <h6>{getTotalQuizzes()}</h6>
                                                                 </div>
                                                             </div>
                                                             <div className="bid-grid-box">
@@ -991,7 +1000,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
 
                                                                                                 <div>
                                                                                                     <span className="course-time-title">
-                                                                                                        {quiz.questions?.length || 0} Questions
+                                                                                                        {lesson.quizzes?.length || 0} Questions
                                                                                                     </span>
                                                                                                 </div>
 
@@ -1193,7 +1202,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
 
                                                                                                                     <div>
                                                                                                                         <span className="course-time-title">
-                                                                                                                            {quiz.questions?.length || 0} Questions
+                                                                                                                            {lesson.quizzes?.length || 0} Questions
                                                                                                                         </span>
                                                                                                                     </div>
 
@@ -1239,33 +1248,57 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                         ) : reviews.length === 0 ? (
                                                             <p className="text-muted">No reviews yet.</p>
                                                         ) : (
-                                                            reviews.map((review, index) => (
-                                                                <div className="quiz-card mb-3" key={index}>
+                                                            reviews.map((review, index) => {
+                                                                const reviewer = review.userId;
+                                                                const firstName = reviewer?.profile?.firstName || "";
+                                                                const lastName = reviewer?.profile?.lastName || "";
+                                                                const displayName = (firstName + " " + lastName).trim() || reviewer?.username || "Anonymous";
+                                                                const profileImg = reviewer?.profile?.profileImage;
+                                                                const avatarSrc = profileImg && !profileImg.includes("boy.png")
+                                                                    ? (profileImg.startsWith("http") ? profileImg : `${getBackendBaseUrl()}${profileImg}`)
+                                                                    : "/boy.png";
 
-                                                                    <div className="cart-details-bx mb-2">
-                                                                        <h5>{review.user?.name || "User"}</h5>
-                                                                        <h6>{review.user?.country || "India"}</h6>
+                                                                return (
+                                                                    <div className="quiz-card mb-3" key={index}>
+                                                                        <div className="cart-details-bx mb-2">
+                                                                            <div className="d-flex align-items-center gap-2 mb-2">
+                                                                                <img
+                                                                                    src={avatarSrc}
+                                                                                    alt={displayName}
+                                                                                    onError={(e) => { e.target.src = "/boy.png"; }}
+                                                                                    style={{
+                                                                                        width: "40px",
+                                                                                        height: "40px",
+                                                                                        borderRadius: "50%",
+                                                                                        objectFit: "cover",
+                                                                                        border: "2px solid #eee"
+                                                                                    }}
+                                                                                />
+                                                                                <div>
+                                                                                    <h5 className="mb-0">{displayName}</h5>
+                                                                                    <h6 className="text-muted mb-0" style={{ fontSize: "0.8rem" }}>{reviewer?.profile?.phone || ""}</h6>
+                                                                                </div>
+                                                                            </div>
 
-                                                                        <ul className="rating-list">
-                                                                            {[1, 2, 3, 4, 5].map((star) => (
-                                                                                <li key={star} className="rating-item">
-                                                                                    {star <= review.rating ? (
-                                                                                        <IoIosStar />
-                                                                                    ) : (
-                                                                                        <IoIosStarOutline />
-                                                                                    )}
-                                                                                </li>
-                                                                            ))}
-                                                                        </ul>
+                                                                            <ul className="rating-list">
+                                                                                {[1, 2, 3, 4, 5].map((star) => (
+                                                                                    <li key={star} className="rating-item">
+                                                                                        {star <= review.rating ? (
+                                                                                            <IoIosStar />
+                                                                                        ) : (
+                                                                                            <IoIosStarOutline />
+                                                                                        )}
+                                                                                    </li>
+                                                                                ))}
+                                                                            </ul>
 
-                                                                        <p className="mt-2">
-                                                                            {review.comment}
-                                                                        </p>
-
+                                                                            <p className="mt-2">
+                                                                                {review.comment}
+                                                                            </p>
+                                                                        </div>
                                                                     </div>
-
-                                                                </div>
-                                                            ))
+                                                                );
+                                                            })
                                                         )}
 
                                                     </div>

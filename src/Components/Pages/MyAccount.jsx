@@ -4,6 +4,7 @@ import { MdAddAPhoto } from "react-icons/md";
 import React, { useState, useEffect } from 'react';
 import { getStoredUser, updateProfile } from '../../services/authService';
 import { useAuth } from '../../contexts/AuthContext';
+import config from '../../config/config';
 
 function MyAccount() {
     const { user: authUser, setUser: setAuthUser } = useAuth();
@@ -28,38 +29,31 @@ function MyAccount() {
             console.log('MyAccount - Auth user flat profileImage:', authUser.profileImage);
             setUser(authUser);
             setFormData({
-                name: authUser.name || authUser.username || '',
+                name: authUser.username || authUser.name || '',
                 email: authUser.email || '',
-                phone: authUser.phone || '',
-                countryCode: authUser.countryCode || '+91',
-                language: authUser.language || 'English'
+                phone: authUser.profile?.phone || '',
+                countryCode: authUser.profile?.countryCode || '+91',
+                language: authUser.profile?.language || 'English'
             });
             
             // Set profile image from auth user
-            if (authUser.profile?.profileImage) {
-                console.log('MyAccount - Raw profile image from auth user:', authUser.profile?.profileImage);
-                console.log('MyAccount - Is base64 image?', authUser.profile?.profileImage.startsWith('data:'));
-                
+            const rawImage = authUser.profile?.profileImage;
+            if (rawImage && !rawImage.includes('picsum.photos')) {
+                console.log('MyAccount - Raw profile image from auth user:', rawImage);
                 let imageUrl;
-                if (authUser.profile?.profileImage.startsWith('data:')) {
-                    // It's a base64 image, use as-is
-                    imageUrl = authUser.profile?.profileImage;
-                } else if (authUser.profile?.profileImage.startsWith('http')) {
-                    // It's already a full URL, use as-is
-                    imageUrl = authUser.profile?.profileImage;
-                } else if (authUser.profile?.profileImage) {
-                    // It's a relative path, construct full URL
-                    imageUrl = `https://udemy-latest-backend-1.onrender.com${authUser.profile.profileImage}`;
-                } else {
-                    // No profile image
-                    imageUrl = null;
-                }
-                
+                                                if (rawImage.includes('boy.png')) {
+                                                    imageUrl = '/boy.png';
+                                                } else if (rawImage.startsWith('data:') || rawImage.startsWith('http')) {
+                                                    imageUrl = rawImage;
+                                                } else {
+                                                    const baseUrl = config.API_BASE_URL.replace('/api', '');
+                                                    imageUrl = `${baseUrl}${rawImage.startsWith('/') ? '' : '/'}${rawImage}`;
+                                                }
                 setProfileImage(imageUrl);
                 console.log('MyAccount - Set profile image from auth user:', imageUrl);
             } else {
-                console.log('MyAccount - No profile image found in auth user, setting default');
-                setProfileImage(null);
+                console.log('MyAccount - No profile image or picsum image found, setting default');
+                setProfileImage('/boy.png');
             }
         } else {
             console.log('MyAccount - No auth user found, setting default image');
@@ -153,11 +147,14 @@ function MyAccount() {
                 
                 // Update profile image state immediately
                 if (result.data.user?.profile?.profileImage) {
-                    const imageUrl = result.data.user.profile.profileImage.startsWith('data:') 
-                        ? result.data.user.profile.profileImage
-                        : result.data.user.profile.profileImage.startsWith('http')
-                        ? result.data.user.profile.profileImage
-                        : `https://udemy-latest-backend-1.onrender.com${result.data.user.profile.profileImage}`;
+                    const profImg = result.data.user.profile.profileImage;
+                    const imageUrl = profImg.includes('boy.png')
+                        ? '/boy.png'
+                        : profImg.startsWith('data:') 
+                        ? profImg
+                        : profImg.startsWith('http')
+                        ? profImg
+                        : `${config.API_BASE_URL.replace('/api', '')}${profImg.startsWith('/') ? '' : '/'}${profImg}`;
                     
                     setProfileImage(imageUrl);
                     console.log('MyAccount - Profile image updated from response:', imageUrl);
@@ -315,13 +312,13 @@ function MyAccount() {
       ? profileImage.startsWith("data:")
         ? profileImage
         : `${profileImage}?t=${Date.now()}`
-      : "/avtar.png"
+      : "/boy.png"
   }
   alt="Profile"
   className="avatar-img"
   onError={(e) => {
     console.log("MyAccount - Image load error, trying fallback:", e.target.src);
-    e.target.src = "/avtar.png";
+    e.target.src = "/boy.png";
   }}
   onLoad={(e) => {
     console.log("MyAccount - Profile image loaded successfully:", e.target.src);

@@ -28,7 +28,7 @@ function Home() {
 
     // Memoize course slices to prevent unnecessary recalculations
     const topLearningCourses = useMemo(() => courses, [courses]);
-    const upcomingCourses = useMemo(() => courses, [courses]);
+    const upcomingCourses = useMemo(() => courses.slice(0, 4), [courses]);
 
     useEffect(() => {
         fetchCourses();
@@ -535,9 +535,9 @@ function Home() {
                                         )} */}
                         </div>
 
-
-
-                      
+                        <div className='text-center top-more-course mt-4'>
+                            <NavLink to="/my-course" className='nw-thm-btn'>Show More</NavLink>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -585,7 +585,9 @@ function Home() {
                                 </div>
                             </div>
                         </div>
-                      
+                        <div className='text-center top-more-course mt-4'>
+                            <NavLink to="/my-course" className='nw-thm-btn'>Show More</NavLink>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -694,7 +696,9 @@ function Home() {
                                 splideRef={splideRef3}
                             />
                         </div>
-                       
+                        <div className='text-center top-more-course mt-4'>
+                            <NavLink to="/my-course" className='nw-thm-btn'>Show More</NavLink>
+                        </div>
                     </div>
                 </div>
             </section>

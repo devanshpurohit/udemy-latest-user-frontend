@@ -365,6 +365,28 @@ const verifyAICard = async (cardNumber, cvv) => {
     }
 };
 
+// Resend OTP function
+const resendOTP = async (email) => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/resend-otp`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email })
+        });
+        const data = await response.json();
+        if (response.ok) {
+            return { success: true, data };
+        } else {
+            return { success: false, error: data.message || 'Resend OTP failed' };
+        }
+    } catch (error) {
+        console.error('Resend OTP error:', error);
+        return { success: false, error: 'Network error. Please try again.' };
+    }
+};
+
 export {
     login,
     register,
@@ -378,6 +400,7 @@ export {
     setToken,
     setUser,
     forgotPassword,
+    resendOTP,
     verifyOtp,
     resetPassword,
     verifyAICard

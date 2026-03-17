@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react"; 
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import config from "../../config/config";
 import { getToken } from "../../services/authService";
@@ -61,6 +61,8 @@ function CourseDetailsContent({ course: propCourse }) {
     const [reviews, setReviews] = useState([]);
     const [reviewText, setReviewText] = useState("")
     const [rating, setRating] = useState(5)
+    const [showAllReviews, setShowAllReviews] = useState(false);
+    const INITIAL_REVIEWS_COUNT = 3;
 
     // 🎯 Check if user has purchased this course
     const [isPurchased, setIsPurchased] = useState(false);
@@ -84,6 +86,31 @@ function CourseDetailsContent({ course: propCourse }) {
     );
 
     // 🎯 Handle quiz click
+    const handleDownloadNotes = () => {
+        try {
+            if (!course?.resources || course.resources.length === 0) {
+                toast.info("No resources available for this course.");
+                return;
+            }
+
+            course.resources.forEach(resource => {
+                const link = document.createElement('a');
+                link.href = resource.url.startsWith('data:') || resource.url.startsWith('http') 
+                    ? resource.url 
+                    : `${config.API_BASE_URL.replace('/api', '')}${resource.url}`;
+                link.download = resource.name || 'resource';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+            
+            toast.success(`Starting download for ${course.resources.length} resource(s)`);
+        } catch (error) {
+            console.error("Download error:", error);
+            toast.error("Failed to download notes. Please try again.");
+        }
+    };
+
     const handleQuizClick = (quiz) => {
         setCurrentQuiz(quiz);
         setCurrentLesson(null);
@@ -92,38 +119,35 @@ function CourseDetailsContent({ course: propCourse }) {
     const submitReview = async (e) => {
         if(e) e.preventDefault();
 
-        const token = localStorage.getItem("token")
+        const token = localStorage.getItem("token");
+        if (!token) { toast.error("Please login to submit a review"); return; }
 
-        const res = await fetch(`${config.API_BASE_URL}/reviews/${course._id}`, {
+        try {
+            const res = await fetch(`${config.API_BASE_URL}/reviews/${course._id}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ rating: rating, comment: reviewText })
+            });
 
-            method: "POST",
+            const data = await res.json();
 
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`
-            },
-
-            body: JSON.stringify({
-                rating: rating,
-                comment: reviewText
-            })
-
-        })
-
-        const data = await res.json()
-
-        if (data.success) {
-
-            toast.success("Review submitted")
-
-            setReviewText("")
-            setRating(5)
-
-            setReviews(prev => [data.data, ...prev])
-
+            if (data.success) {
+                toast.success("Review submitted!");
+                setReviewText("");
+                setRating(5);
+                setReviews(prev => [data.data, ...prev]);
+                // Switch to review tab so user sees their review
+                const reviewTab = document.getElementById("review-tab");
+                if (reviewTab) reviewTab.click();
+            } else {
+                toast.error(data.message || "Failed to submit review");
+            }
+        } catch (err) {
+            console.error("Submit review error:", err);
+            toast.error("Failed to submit review. Please try again.");
         }
-
     }
+
     useEffect(() => {
 
         if (!showVideo || !currentLesson?.videoUrl) return;
@@ -382,6 +406,15 @@ function CourseDetailsContent({ course: propCourse }) {
         return getAllLessons().length;
     };
 
+    const getTotalQuizzesCount = () => {
+        if (!course || !course.sections) return 0;
+        return course.sections.reduce((total, section) => {
+            return total + (section.lessons ? section.lessons.reduce((lessonTotal, lesson) => {
+                return lessonTotal + (lesson.quizzes ? lesson.quizzes.length : 0);
+            }, 0) : 0);
+        }, 0);
+    };
+
     // 🎯 Progress tracking functions
     const loadProgress = () => {
         if (!user || !course?._id) return;
@@ -399,13 +432,37 @@ function CourseDetailsContent({ course: propCourse }) {
         localStorage.setItem(progressKey, JSON.stringify(Array.from(lessonIds)));
     };
 
-    const markLessonCompleted = (lessonId) => {
+    const markLessonCompleted = async (lessonId) => {
+        // Local update
         setCompletedLessons(prev => {
             const newCompleted = new Set(prev);
             newCompleted.add(lessonId);
             saveProgress(newCompleted);
             return newCompleted;
         });
+
+        // ⭐ Sync with Backend
+        try {
+            const token = localStorage.getItem('token');
+            if (token && user?._id && course?._id) {
+                const response = await fetch(`${config.API_BASE_URL}/students/${user._id}/courses/${course._id}/progress`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        lessonId: lessonId,
+                        // Progress calculation is handled by the backend controller usually,
+                        // but we can also calculate a percentage here if the API requires it.
+                    })
+                });
+                const result = await response.json();
+                console.log('Progress sync result:', result);
+            }
+        } catch (err) {
+            console.error("Failed to sync progress to backend:", err);
+        }
 
         // ⭐ video complete hone par review modal open
         setTimeout(() => {
@@ -530,13 +587,13 @@ function CourseDetailsContent({ course: propCourse }) {
                                         <nav aria-label="breadcrumb">
                                             <ol className="breadcrumb custom-breadcrumb">
                                                 <li className="breadcrumb-item">
-                                                    <a href="#" className="breadcrumb-link">
+                                                    <a href="/" className="breadcrumb-link">
                                                         Home
                                                     </a>
                                                 </li>
 
                                                 <li className="breadcrumb-item">
-                                                    <a href="#" className="breadcrumb-link">
+                                                    <a href="/my-course" className="breadcrumb-link">
                                                         Course
                                                     </a>
                                                 </li>
@@ -870,7 +927,7 @@ function CourseDetailsContent({ course: propCourse }) {
                                                             </span>
                                                             <div className="bid-about-content">
                                                                 <p> Quizs</p>
-                                                                <h6>5</h6>
+                                                                <h6>{getTotalQuizzesCount() || '0'}</h6>
                                                             </div>
                                                         </div>
                                                         <div className="bid-grid-box">
@@ -1016,7 +1073,7 @@ function CourseDetailsContent({ course: propCourse }) {
                                                                                         e.nativeEvent.stopImmediatePropagation();
                                                                                     }
                                                                                     // Handle download logic here
-                                                                                    console.log("Download clicked");
+                                                                                    handleDownloadNotes();
                                                                                 }}
                                                                             >
                                                                                 Download Notes
@@ -1124,7 +1181,7 @@ function CourseDetailsContent({ course: propCourse }) {
 
                                                                                                         <div>
                                                                                                             <span className="course-time-title">
-                                                                                                                {quiz.questions?.length || 0} Questions
+                                                                                                                {lesson.quizzes?.length || 0} Questions
                                                                                                             </span>
                                                                                                         </div>
 
@@ -1206,47 +1263,67 @@ function CourseDetailsContent({ course: propCourse }) {
                                                             <p className="text-center">No reviews yet</p>
                                                         )}
 
-                                                        {reviews.map((review) => (
+                                                        {(showAllReviews ? reviews : reviews.slice(0, INITIAL_REVIEWS_COUNT)).map((review) => {
+                                                            const reviewer = review.userId;
+                                                            const firstName = reviewer?.profile?.firstName || "";
+                                                            const lastName = reviewer?.profile?.lastName || "";
+                                                            const displayName = (firstName + " " + lastName).trim() || reviewer?.username || "User";
+                                                            const profileImg = reviewer?.profile?.profileImage;
+                                                            const avatarSrc = profileImg && !profileImg.includes("boy.png")
+                                                                ? (profileImg.startsWith("http") ? profileImg : `${config.API_BASE_URL.replace("/api", "")}${profileImg}`)
+                                                                : "/boy.png";
 
-                                                            <div className="udemy-review-box" key={review._id}>
+                                                            return (
+                                                                <div className="udemy-review-box" key={review._id}>
 
-                                                                <div className="udemy-review-picture">
-                                                                    <img src={review.userId?.profileImage || "/review_01.jpg"} alt="" />
-                                                                </div>
+                                                                    <div className="udemy-review-picture">
+                                                                        <img
+                                                                            src={avatarSrc}
+                                                                            alt={displayName}
+                                                                            onError={(e) => { e.target.src = "/boy.png"; }}
+                                                                        />
+                                                                    </div>
 
-                                                                <div className="udemy-review-content">
+                                                                    <div className="udemy-review-content">
 
-                                                                    <h5>{review.userId?.name || "User"}</h5>
+                                                                        <h5>{displayName}</h5>
 
-                                                                    <h6>
-                                                                        {new Date(review.createdAt).toLocaleDateString()}
-                                                                    </h6>
+                                                                        <h6>
+                                                                            {new Date(review.createdAt).toLocaleDateString()}
+                                                                        </h6>
 
-                                                                    <div className="cart-details-bx mb-2">
+                                                                        <div className="cart-details-bx mb-2">
 
-                                                                        <ul className="rating-list">
+                                                                            <ul className="rating-list">
 
-                                                                            {[...Array(review.rating)].map((_, i) => (
-                                                                                <li key={i} className="rating-item">
-                                                                                    <IoIosStar />
-                                                                                </li>
-                                                                            ))}
+                                                                                {[...Array(review.rating)].map((_, i) => (
+                                                                                    <li key={i} className="rating-item">
+                                                                                        <IoIosStar />
+                                                                                    </li>
+                                                                                ))}
 
-                                                                        </ul>
+                                                                            </ul>
+
+                                                                        </div>
+
+                                                                        <p>{review.comment}</p>
 
                                                                     </div>
 
-                                                                    <p>{review.comment}</p>
-
                                                                 </div>
+                                                            );
+                                                        })}
 
+                                                        {reviews.length > INITIAL_REVIEWS_COUNT && (
+                                                            <div className="text-center mt-2">
+                                                                <button
+                                                                    className="thm-btn outline"
+                                                                    onClick={() => setShowAllReviews(prev => !prev)}
+                                                                >
+                                                                    {showAllReviews ? "Show Less" : `View More (${reviews.length - INITIAL_REVIEWS_COUNT} more)`}
+                                                                </button>
                                                             </div>
-
-                                                        ))}
-
-                                                        <div className="text-center mt-2">
-                                                            <button className="thm-btn outline">View More</button>
-                                                        </div>
+                                                        )}
 
                                                     </div>
                                                 </div>
@@ -1372,7 +1449,6 @@ function CourseDetailsContent({ course: propCourse }) {
                 </div>
             </section>
 
-            {/* payment Successful Popup Start  */}
             <div className="modal step-modal fade" id="review-Add" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
                 aria-labelledby="staticBackdropLabel" aria-hidden="true">
                 <div className="modal-dialog modal-dialog-centered modal-md">
@@ -1385,33 +1461,42 @@ function CourseDetailsContent({ course: propCourse }) {
                         <div className="modal-body px-4">
                             <div className="row ">
                                 <div className="col-lg-12">
-                                    <form action="">
+                                    <form onSubmit={submitReview}>
                                         <div className="offer-modal-content">
                                             <span className="offer-modal-icon"> <MdRateReview /> </span>
                                             <h6 className="fz-24 fw-700">How was your learning experience? Share a quick review!</h6>
 
-                                            <div className=" cart-details-bx d-flex align-items-center justify-content-center">
+                                            <div className="cart-details-bx d-flex align-items-center justify-content-center">
                                                 <ul className="rating-list">
-                                                    <li className="rating-item"><a href="#" className="review-ration-btn fz-24"> <IoIosStar />
-                                                    </a></li>
-                                                    <li className="rating-item"><a href="#" className="review-ration-btn fz-24"> <IoIosStarOutline />
-                                                    </a></li>
-                                                    <li className="rating-item"><a href="#" className="review-ration-btn fz-24"> <IoIosStarOutline /> </a></li>
-                                                    <li className="rating-item"><a href="#" className="review-ration-btn fz-24"> <IoIosStarOutline /></a></li>
-                                                    <li className="rating-item"><a href="#" className="review-ration-btn fz-24"> <IoIosStarOutline /></a></li>
+                                                    {[1,2,3,4,5].map((star) => (
+                                                        <li key={star} className="rating-item">
+                                                            <a
+                                                                href="#"
+                                                                className="review-ration-btn fz-24"
+                                                                onClick={(e) => { e.preventDefault(); setRating(star); }}
+                                                            >
+                                                                {star <= rating ? <IoIosStar /> : <IoIosStarOutline />}
+                                                            </a>
+                                                        </li>
+                                                    ))}
                                                 </ul>
                                             </div>
                                         </div>
 
                                         <div className="custom-frm-bx">
-                                            <textarea name="" id="" className="form-control " style={{ height: "167px" }} placeholder="Write here Something(Optional)"></textarea>
+                                            <textarea
+                                                className="form-control"
+                                                style={{ height: "167px" }}
+                                                placeholder="Write here Something(Optional)"
+                                                value={reviewText}
+                                                onChange={(e) => setReviewText(e.target.value)}
+                                            ></textarea>
                                         </div>
 
                                         <div className="mt-4 text-center">
                                             <button
-                                                type="button"
+                                                type="submit"
                                                 className="thm-btn px-5"
-                                                onClick={submitReview}
                                                 data-bs-dismiss="modal"
                                             >
                                                 Submit

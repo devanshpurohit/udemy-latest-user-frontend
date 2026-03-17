@@ -57,8 +57,14 @@ export const AuthProvider = ({ children }) => {
 
     const handleLogout = () => {
         logout();
+        // Clear cart so next user doesn't see previous user's cart
+        localStorage.removeItem('cart');
+        // Also clear session cache
+        sessionStorage.clear();
         setIsAuthenticated(false);
         setUser(null);
+        // Dispatch event so cart count in header updates immediately
+        window.dispatchEvent(new Event('cartUpdated'));
     };
 
     const value = {

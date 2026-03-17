@@ -12,16 +12,15 @@ function MyCourses() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
-    const coursesPerPage = 4;
+    const [selectedRating, setSelectedRating] = useState(null);
+    const [selectedLanguage, setSelectedLanguage] = useState(null);
+    const [selectedSort, setSelectedSort] = useState('newest');
+    const coursesPerPage = 8;
 
-    // Pagination logic
-    const totalPages = Math.ceil(courses.length / coursesPerPage);
-    const startIndex = (currentPage - 1) * coursesPerPage;
-    const endIndex = startIndex + coursesPerPage;
-    const currentCourses = courses.slice(startIndex, endIndex);
 
     const handlePageChange = (page) => {
         setCurrentPage(page);
+        window.scrollTo(0, 500); // Scroll to top of results on page change
     };
 
     const fetchMyCourses = async () => {
@@ -65,7 +64,64 @@ function MyCourses() {
         fetchMyCourses();
     }, []);
 
-    const myCoursesList = useMemo(() => courses, [courses]);
+    const filteredAndSortedCourses = useMemo(() => {
+        let result = [...courses];
+
+        // Filter by Rating
+        if (selectedRating !== null) {
+            result = result.filter(course => (course.averageRating || 0) >= selectedRating);
+        }
+
+        // Filter by Language
+        if (selectedLanguage !== null) {
+            result = result.filter(course => course.language === selectedLanguage);
+        }
+
+        // Sort
+        result.sort((a, b) => {
+            if (selectedSort === 'popular') {
+                return (b.totalEnrollments || 0) - (a.totalEnrollments || 0);
+            } else if (selectedSort === 'newest') {
+                return new Date(b.createdAt) - new Date(a.createdAt);
+            } else if (selectedSort === 'oldest') {
+                return new Date(a.createdAt) - new Date(b.createdAt);
+            }
+            return 0;
+        });
+
+        return result;
+    }, [courses, selectedRating, selectedLanguage, selectedSort]);
+
+    // Pagination logic
+    const totalPages = Math.ceil(filteredAndSortedCourses.length / coursesPerPage);
+    const startIndex = (currentPage - 1) * coursesPerPage;
+    const endIndex = startIndex + coursesPerPage;
+    const currentCourses = filteredAndSortedCourses.slice(startIndex, endIndex);
+
+    // Reset page when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [selectedRating, selectedLanguage, selectedSort]);
+    
+    // Helper to get dropdown labels
+    const getRatingLabel = () => {
+        if (selectedRating === null) return 'All Rated';
+        return `${selectedRating} Star & Up`;
+    };
+
+    const getLanguageLabel = () => {
+        if (selectedLanguage === null) return 'Language';
+        return selectedLanguage;
+    };
+
+    const getSortLabel = () => {
+        switch (selectedSort) {
+            case 'popular': return 'Popular';
+            case 'newest': return 'Newest';
+            case 'oldest': return 'Oldest';
+            default: return 'Sort By';
+        }
+    };
 
     return (
         <>
@@ -81,7 +137,7 @@ function MyCourses() {
                                         <nav aria-label="breadcrumb">
                                             <ol className="breadcrumb custom-breadcrumb">
                                                 <li className="breadcrumb-item">
-                                                    <a href="#" className="breadcrumb-link">
+                                                    <a href="/home-second" className="breadcrumb-link">
                                                         Home
                                                     </a>
                                                 </li>
@@ -112,101 +168,70 @@ function MyCourses() {
                             </div>
 
                             <div className="udemy-dropdown-box gap-3">
-                                <div className="dropdown">
-                                    <a
-                                        href="#"
-                                        className="vertical-btn dropdown-toggle"
-                                        id="acticonMenu2"
-                                        data-bs-toggle="dropdown"
-                                        aria-expanded="false"
-                                    >
-                                        All Rated
-                                    </a>
-                                    <ul
-                                        className="dropdown-menu dropdown-menu-end  tble-action-menu admin-dropdown-card"
-                                        aria-labelledby="acticonMenu2"
-                                    >
-                                        <li className="prescription-item">
-                                            <a href="#" className="prescription-nav">
-                                                5 Star
-                                            </a>
-                                        </li>
-                                        <li className="prescription-item">
-                                            <a href="#" className="prescription-nav" >
-                                                4 Star
-                                            </a>
-                                        </li>
-                                        <li className="prescription-item">
-                                            <a href="#" className="prescription-nav" >
-                                                3 Star
-                                            </a>
-                                        </li>
-                                        <li className="prescription-item">
-                                            <a href="#" className="prescription-nav" >
-                                                2 Star
-                                            </a>
-                                        </li>
-                                        <li className="prescription-item">
-                                            <a href="#" className="prescription-nav" >
-                                                1 Star
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </div>
 
                                 <div className="dropdown">
-                                    <a
-                                        href="#"
-                                        className="vertical-btn dropdown-toggle"
-                                        id="acticonMenu2"
+                                    <button
+                                        type="button"
+                                        className="vertical-btn dropdown-toggle w-100 text-start"
+                                        id="languageDropdown"
                                         data-bs-toggle="dropdown"
                                         aria-expanded="false"
                                     >
-                                        Language
-                                    </a>
+                                        {getLanguageLabel()}
+                                    </button>
                                     <ul
-                                        className="dropdown-menu dropdown-menu-end  tble-action-menu admin-dropdown-card"
-                                        aria-labelledby="acticonMenu2"
+                                        className="dropdown-menu dropdown-menu-end tble-action-menu admin-dropdown-card"
+                                        aria-labelledby="languageDropdown"
                                     >
                                         <li className="prescription-item">
-                                            <a href="#" className="prescription-nav" >
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedLanguage(null); }}>
+                                                All Languages
+                                            </a>
+                                        </li>
+                                        <li className="prescription-item">
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedLanguage('English'); }}>
                                                 English
                                             </a>
                                         </li>
                                         <li className="prescription-item">
-                                            <a href="#" className="prescription-nav" >
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedLanguage('Tamil'); }}>
                                                 Tamil
+                                            </a>
+                                        </li>
+                                        <li className="prescription-item">
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedLanguage('Hindi'); }}>
+                                                Hindi
                                             </a>
                                         </li>
                                     </ul>
                                 </div>
 
                                 <div className="dropdown">
-                                    <a
-                                        href="#"
-                                        className="vertical-btn dropdown-toggle"
-                                        id="acticonMenu2"
+                                    <button
+                                        type="button"
+                                        className="vertical-btn dropdown-toggle w-100 text-start"
+                                        id="sortDropdown"
                                         data-bs-toggle="dropdown"
                                         aria-expanded="false"
                                     >
-                                        Sort By
-                                    </a>
+                                        {getSortLabel()}
+                                    </button>
                                     <ul
-                                        className="dropdown-menu dropdown-menu-end  tble-action-menu admin-dropdown-card"
-                                        aria-labelledby="acticonMenu2"
+                                        className="dropdown-menu dropdown-menu-end tble-action-menu admin-dropdown-card"
+                                        aria-labelledby="sortDropdown"
                                     >
                                         <li className="prescription-item">
-                                            <a href="#" className="prescription-nav" data-bs-toggle="modal" data-bs-target="#edit-Announcement">
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedSort('popular'); }}>
                                                 Popular
                                             </a>
                                         </li>
                                         <li className="prescription-item">
-                                            <a href="#" className="prescription-nav" data-bs-toggle="modal" data-bs-target="#edit-Announcement">
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedSort('newest'); }}>
                                                 Newest
                                             </a>
                                         </li>
                                         <li className="prescription-item">
-                                            <a href="#" className="prescription-nav" >
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedSort('oldest'); }}>
                                                 Oldest
                                             </a>
                                         </li>

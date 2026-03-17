@@ -2,14 +2,17 @@ import { faDownload, faEye, faSearch, faStar, faStarHalf, faUser } from "@fortaw
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { FaMoneyBill } from "react-icons/fa";
 import { FaBookOpen } from "react-icons/fa";
-import { MdBook } from "react-icons/md";
+import { MdBook, MdChevronLeft, MdChevronRight } from "react-icons/md";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from "react-router-dom";
 import { getDashboardData } from '../../services/apiService';
 import { getCurrentUser } from '../../services/apiService';
 import { useAuth } from '../../contexts/AuthContext';
 import { getBackendBaseUrl } from '../../config/backendConfig';
+import certificateService from "../../services/certificateService";
+import { toast } from "react-toastify";
+import { faClose } from "@fortawesome/free-solid-svg-icons";
 
 function MyDashboard() {
     const navigate = useNavigate();
@@ -31,6 +34,21 @@ function MyDashboard() {
         }
     });
 
+    const [showCertificateModal, setShowCertificateModal] = useState(false);
+    const [viewingCertificate, setViewingCertificate] = useState(null);
+    const [certificateLoading, setCertificateLoading] = useState(false);
+
+    const [showOrderModal, setShowOrderModal] = useState(false);
+    const [viewingOrder, setViewingOrder] = useState(null);
+
+    const [currentCoursePage, setCurrentCoursePage] = useState(1);
+    const [currentOrderPage, setCurrentOrderPage] = useState(1);
+    const itemsPerPage = 8;
+
+    // Search and Sort states
+    const [certSearch, setCertSearch] = useState("");
+    const [orderSearch, setOrderSearch] = useState("");
+
     useEffect(() => {
         // Use auth user instead of localStorage
         if (authUser) {
@@ -43,6 +61,15 @@ function MyDashboard() {
         }
         setLoading(false);
     }, [authUser]);
+
+    // Reset pagination when search changes
+    useEffect(() => {
+        setCurrentOrderPage(1);
+    }, [orderSearch]);
+
+    useEffect(() => {
+        setCurrentCoursePage(1);
+    }, [certSearch]);
 
     const loadDashboardData = async () => {
         try {
@@ -101,14 +128,14 @@ function MyDashboard() {
                     totalEnrolled: realData.enrolledCourses?.length || 0,
                     totalActive: realData.activeCourses?.length || 0,
                     totalCompleted: realData.allCourses?.length || 0,
-                    totalQuizzes: 0 // Will be added later
+                    totalQuizzes: data.stats?.totalQuizzes || 0
                 };
                 
                 setDashboardData({
                     enrolledCourses: realData.enrolledCourses || [],
                     completedCourses: realData.allCourses || [],
                     activeCourses: realData.activeCourses || [],
-                    certificates: [],
+                    certificates: realData.certificates || [],
                     orders: realData.orders || [],
                     stats: stats
                 });
@@ -180,6 +207,110 @@ function MyDashboard() {
             }
         } catch (error) {
             console.error('❌ Error loading courses:', error);
+        }
+    };
+
+    const filteredCertificates = useMemo(() => {
+        let result = [...(dashboardData.certificates || [])];
+        
+        // Search filter
+        if (certSearch) {
+            result = result.filter(cert => 
+                cert.courseTitle?.toLowerCase().includes(certSearch.toLowerCase()) ||
+                cert.certificateId?.toLowerCase().includes(certSearch.toLowerCase())
+            );
+        }
+
+        // Default Sorting (Newest First)
+        result.sort((a, b) => {
+            const dateA = new Date(a.completedAt || a.issuedAt);
+            const dateB = new Date(b.completedAt || b.issuedAt);
+            return dateB - dateA;
+        });
+
+        return result;
+    }, [dashboardData.certificates, certSearch]);
+
+    const filteredOrders = useMemo(() => {
+        let result = [...(dashboardData.orders || [])];
+
+        // Search filter
+        if (orderSearch) {
+            result = result.filter(order => 
+                order.orderId?.toLowerCase().includes(orderSearch.toLowerCase()) ||
+                order.courseId?.title?.toLowerCase().includes(orderSearch.toLowerCase())
+            );
+        }
+
+        // Default Sorting (Newest First)
+        result.sort((a, b) => {
+            const dateA = new Date(a.createdAt);
+            const dateB = new Date(b.createdAt);
+            return dateB - dateA;
+        });
+
+        return result;
+    }, [dashboardData.orders, orderSearch]);
+
+    const paginatedCourses = useMemo(() => {
+        const startIndex = (currentCoursePage - 1) * itemsPerPage;
+        return allCourses.slice(startIndex, startIndex + itemsPerPage);
+    }, [allCourses, currentCoursePage]);
+
+    const paginatedOrders = useMemo(() => {
+        const startIndex = (currentOrderPage - 1) * itemsPerPage;
+        return filteredOrders.slice(startIndex, startIndex + itemsPerPage);
+    }, [filteredOrders, currentOrderPage]);
+
+    const totalCoursePages = Math.ceil(allCourses.length / itemsPerPage);
+    const totalOrderPages = Math.ceil(filteredOrders.length / itemsPerPage);
+
+    const handleViewOrder = (order) => {
+        setViewingOrder(order);
+        setShowOrderModal(true);
+    };
+
+    const handleCoursePageChange = (page) => {
+        setCurrentCoursePage(page);
+    };
+
+    const handleOrderPageChange = (page) => {
+        setCurrentOrderPage(page);
+    };
+
+    const handleViewCertificate = async (certificateId) => {
+        try {
+            setCertificateLoading(true);
+            const response = await certificateService.getCertificate(certificateId);
+            if (response.success) {
+                setViewingCertificate(response.data.certificate);
+                setShowCertificateModal(true);
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error(error.message || "Failed to fetch certificate details");
+        } finally {
+            setCertificateLoading(false);
+        }
+    };
+
+    const handleDownloadCertificate = async (certificateId) => {
+        try {
+            setCertificateLoading(true);
+            const response = await certificateService.getCertificate(certificateId);
+            if (response.success) {
+                // If the backend returns a URL or we need to print, 
+                // for now we'll just open the view modal and let them print
+                // or if there's a specific download logic, implement it here.
+                setViewingCertificate(response.data.certificate);
+                setShowCertificateModal(true);
+                toast.info("Opening certificate for download/print");
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to download certificate");
+        } finally {
+            setCertificateLoading(false);
         }
     };
 
@@ -465,9 +596,14 @@ function MyDashboard() {
                                                                                      </span>
                                                                                 </td>
                                                                                 <td>
-                                                                                    <span>
-                                                                                        <a href="#" className="dw-btn"> <FontAwesomeIcon icon={faDownload} /> </a>
-                                                                                    </span>
+                                                                                    <div className="d-flex gap-2">
+                                                                                        <button type="button" className="dw-btn" onClick={() => handleViewOrder(order)} title="View Order">
+                                                                                            <FontAwesomeIcon icon={faEye} />
+                                                                                        </button>
+                                                                                        <button type="button" className="dw-btn" onClick={() => handleViewOrder(order)} title="Download Receipt">
+                                                                                            <FontAwesomeIcon icon={faDownload} />
+                                                                                        </button>
+                                                                                    </div>
                                                                                 </td>
                                                                             </tr>
                                                                         ))
@@ -530,8 +666,8 @@ function MyDashboard() {
 
                                         <div className="course-card">
                                             <div className="row">
-                                                {allCourses.length > 0 ? (
-                                                    allCourses.map((course) => (
+                                                {paginatedCourses.length > 0 ? (
+                                                    paginatedCourses.map((course) => (
                                                         <div key={course._id} className="col-lg-4 col-md-6 col-sm-12 mb-3">
                                                             <div 
                                                               className="udemy-cards"
@@ -547,29 +683,11 @@ function MyDashboard() {
                                                                         <FontAwesomeIcon icon={faUser} className="udemy-course-icon" />
                                                                         <a href="#" className="udemy-user">{typeof course.instructor === 'object' ? (course.instructor?.name || course.instructor?.username || "Instructor") : (course.instructor || "Instructor")}</a>
                                                                     </span>
-                                                                    <p>{course.description}</p>
+                                                                    <p className="line-clamp-2">{course.description}</p>
                                                                     <ul className="rating-list">
                                                                         {renderStars(course.rating || 0)}
                                                                         <li className="rating-item"><span className="rating-number">({course.reviewsCount || course.totalRatings || 0})</span></li>
                                                                     </ul>
-
-                                                                    <div className="progress-wrapper mt-1">
-                                                                        <div className="progress-item">
-                                                                            <div className="d-flex align-items-center justify-content-between udemy-progress">
-                                                                                <span className="udemy-complete-video">
-                                                                                    {course.status === 'completed' ? 'Completed' : `(${course.completedVideos || 0}/${course.totalVideos || 0})Video Completed`}
-                                                                                </span>
-                                                                                <span className="progress-label fz-12 fw-500">{course.progress || 0}%</span>
-                                                                            </div>
-
-                                                                            <div className="progress custom-progress">
-                                                                                <div
-                                                                                    className={course.status === 'completed' ? 'complete-bar' : 'progress-bar'}
-                                                                                    style={{ width: `${course.progress || 0}%` }}
-                                                                                ></div>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -580,18 +698,39 @@ function MyDashboard() {
                                                             <div className="mb-3">
                                                                 <MdBook size={48} className="text-muted" />
                                                             </div>
-                                                            <h4 className="text-muted">No Enrolled Courses Yet</h4>
-                                                            <p className="text-muted">Start learning by enrolling in your first course!</p>
-                                                            <button 
-                                                                className="btn btn-primary"
-                                                                onClick={() => window.location.href = '/courses'}
-                                                            >
-                                                                Browse Courses
-                                                            </button>
+                                                            <h4 className="text-muted">No Courses Available</h4>
                                                         </div>
                                                     </div>
                                                 )}
                                             </div>
+
+                                            {totalCoursePages > 1 && (
+                                                <div className="row mt-4">
+                                                    <div className="col-lg-12">
+                                                        <div className="d-flex align-items-center justify-content-center">
+                                                            <ul className="pagination custom-pagination gap-2">
+                                                                <li className={`page-item ${currentCoursePage === 1 ? 'disabled' : ''}`}>
+                                                                    <button className="page-link" onClick={() => handleCoursePageChange(currentCoursePage - 1)}>
+                                                                        <MdChevronLeft />
+                                                                    </button>
+                                                                </li>
+                                                                {[...Array(totalCoursePages)].map((_, i) => (
+                                                                    <li key={i} className={`page-item ${currentCoursePage === i + 1 ? 'active' : ''}`}>
+                                                                        <button className="page-link" onClick={() => handleCoursePageChange(i + 1)}>
+                                                                            {i + 1}
+                                                                        </button>
+                                                                    </li>
+                                                                ))}
+                                                                <li className={`page-item ${currentCoursePage === totalCoursePages ? 'disabled' : ''}`}>
+                                                                    <button className="page-link" onClick={() => handleCoursePageChange(currentCoursePage + 1)}>
+                                                                        <MdChevronRight />
+                                                                    </button>
+                                                                </li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -600,10 +739,10 @@ function MyDashboard() {
                                         id="review"
                                         role="tabpanel"
                                     >
-                                        <div className="row justify-content-between mb-3">
+                                        <div className="row justify-content-between mb-3 align-items-center">
                                             <div className="col-lg-5">
                                                 <div className="custom-frm-bx mb-0">
-                                                    <input type="text" className="form-control ps-5 nw-search-control" placeholder="Search" />
+                                                    <input type="text" className="form-control ps-5 nw-search-control" placeholder="Search Certificate..." value={certSearch} onChange={(e) => setCertSearch(e.target.value)} />
 
                                                     <div className="dash-search-box">
                                                         <button className="dash-search-btn"> <FontAwesomeIcon icon={faSearch} /> </button>
@@ -622,31 +761,41 @@ function MyDashboard() {
                                                                 <thead>
                                                                     <tr>
                                                                         <th>S.No</th>
-                                                                        <th>Certificate Name</th>
-                                                                        <th>Payment Method</th>
-<th>Status</th>
-<th>Actions</th>
-                                                                       
+                                                                        <th>Course Name</th>
+                                                                        <th>Issue Date</th>
+                                                                        <th>Certificate ID</th>
+                                                                        <th>Actions</th>
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody>
-                                                                    {dashboardData.certificates && dashboardData.certificates.length > 0 ? (
-                                                                        dashboardData.certificates.map((certificate, index) => (
+                                                                    {filteredCertificates && filteredCertificates.length > 0 ? (
+                                                                        filteredCertificates.map((certificate, index) => (
                                                                             <tr key={certificate._id}>
                                                                                 <td>{String(index + 1).padStart(2, '0')}.</td>
-                                                                                <td>{certificate.courseTitle} Certificate</td>
-                                                                                <td>{certificate.issueDate}</td>
+                                                                                <td>
+                                                                                    <div className="admin-table-bx">
+                                                                                        <div className="admin-table-sub-bx">
+                                                                                            <div className="admin-table-sub-details doctor-title ps-0">
+                                                                                                <h6>{certificate.courseTitle}</h6>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </td>
+                                                                                <td>{new Date(certificate.completedAt || certificate.issuedAt).toLocaleDateString()}</td>
+                                                                                <td>
+                                                                                    <span className="badge bg-light text-dark">{certificate.certificateId}</span>
+                                                                                </td>
                                                                                 <td>
                                                                                     <span>
-                                                                                        <a href={certificate.downloadUrl || "javascript:void(0)"} className="dw-btn"> <FontAwesomeIcon icon={faDownload} /> </a>
-                                                                                        <a href={certificate.downloadUrl || "javascript:void(0)"} className="dw-btn"> <FontAwesomeIcon icon={faEye} /> </a>
+                                                                                        <a href="#" className="dw-btn" title="Download" onClick={() => handleDownloadCertificate(certificate._id)}> <FontAwesomeIcon icon={faDownload} /> </a>
+                                                                                        <a href="#" className="dw-btn" title="View" onClick={() => handleViewCertificate(certificate._id)}> <FontAwesomeIcon icon={faEye} /> </a>
                                                                                     </span>
                                                                                 </td>
                                                                             </tr>
                                                                         ))
                                                                     ) : (
                                                                         <tr>
-                                                                            <td colSpan="4" className="text-center">
+                                                                            <td colSpan="5" className="text-center">
                                                                                 <p className="text-muted">No certificates found</p>
                                                                             </td>
                                                                         </tr>
@@ -665,10 +814,10 @@ function MyDashboard() {
                                         id="history"
                                         role="tabpanel"
                                     >
-                                        <div className="row justify-content-between mb-3">
+                                        <div className="row justify-content-between mb-3 align-items-center">
                                             <div className="col-lg-5">
                                                 <div className="custom-frm-bx mb-0">
-                                                    <input type="text" className="form-control ps-5 nw-search-control" placeholder="Search" />
+                                                    <input type="text" className="form-control ps-5 nw-search-control" placeholder="Search Order History..." value={orderSearch} onChange={(e) => setOrderSearch(e.target.value)} />
 
                                                     <div className="dash-search-box">
                                                         <button className="dash-search-btn"> <FontAwesomeIcon icon={faSearch} /> </button>
@@ -690,48 +839,45 @@ function MyDashboard() {
                                                                         <th>Order Number</th>
                                                                         <th>Course</th>
                                                                         <th>Amount</th>
-                                                                                                                                                <th>Payment Method</th>
-<th>Status</th>
-<th>Actions</th>
+                                                                        <th>Payment Method</th>
+                                                                        <th>Status</th>
+                                                                        <th>Actions</th>
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody>
-                                                                    {dashboardData.orders && dashboardData.orders.length > 0 ? (
-                                                                        dashboardData.orders.map((order, index) => (
+                                                                    {paginatedOrders.length > 0 ? (
+                                                                        paginatedOrders.map((order, index) => (
                                                                           <tr key={order._id}>
-  <td>{String(index + 1).padStart(2, '0')}.</td>
-  <td>{order.orderId}</td>
-
-  <td>
-    <div className="admin-table-bx">
-      <div className="admin-table-sub-bx">
-       <img
-src={order.courseId?.courseImage || "/pic_01.jpg"}
-alt={order.courseId?.title}
-/>
-        <div className="admin-table-sub-details doctor-title">
-          <h6>{order.courseId?.title}</h6>
-        </div>
-      </div>
-    </div>
-  </td>
-
-  <td>₹{order.amount}</td>
-
-  <td>{order.paymentMethod === 'bank_transfer' || order.paymentMethod === 'Bank Transfer' ? 'Bank Transfer' : (order.paymentMethod === 'upi' || order.paymentMethod === 'UPI' ? 'UPI' : 'UPI')}</td>
-
-  <td>
-    <span className={order.paymentStatus === 'completed' ? 'public-title' : 'pending-title'}>
-                                                                                         {order.paymentStatus === 'completed' ? 'Paid' : 'Pending'}
-                                                                                     </span>
-  </td>
-
-  <td>
-    <a href="#" className="dw-btn">
-      <FontAwesomeIcon icon={faDownload} />
-    </a>
-  </td>
-</tr>
+                                                                            <td>{String((currentOrderPage - 1) * itemsPerPage + index + 1).padStart(2, '0')}.</td>
+                                                                            <td>{order.orderId}</td>
+                                                                            <td>
+                                                                                <div className="admin-table-bx">
+                                                                                    <div className="admin-table-sub-bx">
+                                                                                        <img src={order.courseId?.courseImage || order.courseId?.thumbnail || order.courseId?.image || "/pic_01.jpg"} alt={order.courseId?.title} />
+                                                                                        <div className="admin-table-sub-details doctor-title">
+                                                                                            <h6>{order.courseId?.title}</h6>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </td>
+                                                                            <td>₹{order.amount}</td>
+                                                                            <td>{order.paymentMethod === 'bank_transfer' || order.paymentMethod === 'Bank Transfer' ? 'Bank Transfer' : (order.paymentMethod === 'upi' || order.paymentMethod === 'UPI' ? 'UPI' : 'UPI')}</td>
+                                                                            <td>
+                                                                                <span className={order.paymentStatus === 'completed' ? 'public-title' : 'pending-title'}>
+                                                                                                                                                                     {order.paymentStatus === 'completed' ? 'Paid' : 'Pending'}
+                                                                                                                                                                 </span>
+                                                                            </td>
+                                                                            <td>
+                                                                                <div className="d-flex gap-2">
+                                                                                    <button type="button" className="dw-btn" onClick={() => handleViewOrder(order)} title="View Order">
+                                                                                        <FontAwesomeIcon icon={faEye} />
+                                                                                    </button>
+                                                                                    <button type="button" className="dw-btn" onClick={() => handleViewOrder(order)} title="Download Receipt">
+                                                                                        <FontAwesomeIcon icon={faDownload} />
+                                                                                    </button>
+                                                                                </div>
+                                                                            </td>
+                                                                          </tr>
                                                                         ))
                                                                     ) : (
                                                                         <tr>
@@ -743,6 +889,29 @@ alt={order.courseId?.title}
                                                                 </tbody>
                                                             </table>
                                                         </div>
+                                                        {totalOrderPages > 1 && (
+                                                            <div className="d-flex align-items-center justify-content-center mt-4">
+                                                                <ul className="pagination custom-pagination gap-2">
+                                                                    <li className={`page-item ${currentOrderPage === 1 ? 'disabled' : ''}`}>
+                                                                        <button className="page-link" onClick={() => handleOrderPageChange(currentOrderPage - 1)}>
+                                                                            <MdChevronLeft />
+                                                                        </button>
+                                                                    </li>
+                                                                    {[...Array(totalOrderPages)].map((_, i) => (
+                                                                        <li key={i} className={`page-item ${currentOrderPage === i + 1 ? 'active' : ''}`}>
+                                                                            <button className="page-link" onClick={() => handleOrderPageChange(i + 1)}>
+                                                                                {i + 1}
+                                                                            </button>
+                                                                        </li>
+                                                                    ))}
+                                                                    <li className={`page-item ${currentOrderPage === totalOrderPages ? 'disabled' : ''}`}>
+                                                                        <button className="page-link" onClick={() => handleOrderPageChange(currentOrderPage + 1)}>
+                                                                            <MdChevronRight />
+                                                                        </button>
+                                                                    </li>
+                                                                </ul>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -754,6 +923,155 @@ alt={order.courseId?.title}
                     </div>
                 </div>
             </section>
+
+            {/* Certificate View Modal */}
+            <div className={`modal step-modal fade ${showCertificateModal ? 'show d-block' : ''}`} style={{ display: showCertificateModal ? 'block' : 'none' }} id="view-Certificate" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
+                aria-labelledby="staticBackdropLabel" aria-hidden={!showCertificateModal}>
+                <div className="modal-dialog modal-dialog-centered modal-lg">
+                    <div className="modal-content custom-modal-box">
+                        <div className="text-end">
+                            <button type="button" className="modal-close-btn" onClick={() => setShowCertificateModal(false)}>
+                                <FontAwesomeIcon icon={faClose} />
+                            </button>
+                        </div>
+                        <div className="d-flex align-items-center justify-content-between popup-nw-brd px-4">
+                            <div>
+                                <h6 className="lg_title mb-0" style={{ color: 'black' }}>Certificate Details</h6>
+                            </div>
+                        </div>
+                        <div className="modal-body px-4">
+                            {viewingCertificate && (
+                                <div className="certificate-view">
+                                    <div className="row mb-3">
+                                        <div className="col-md-12">
+                                            <div className="certificate-content text-center p-4 border rounded bg-light">
+                                                <h4 className="mb-4">CERTIFICATE OF COMPLETION</h4>
+                                                <p className="mb-2">This is to certify that</p>
+                                                <h2 className="mb-4 text-primary font-weight-bold">{viewingCertificate.studentName}</h2>
+                                                <p className="mb-2">has successfully completed the course</p>
+                                                <h3 className="mb-4">{viewingCertificate.courseTitle}</h3>
+                                                <p className="mb-4">Issued on: {new Date(viewingCertificate.issuedAt).toLocaleDateString()}</p>
+                                                <div className="mt-4 pt-4 border-top">
+                                                    <p className="mb-0">Certificate ID: <strong>{viewingCertificate.certificateId}</strong></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="row">
+                                        <div className="col-md-12 text-center">
+                                            <div className="alert alert-info py-2">
+                                                <small>Verification Code: {viewingCertificate.certificateId}</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="modal-footer px-4">
+                            <button type="button" className="sm-thm-btn outline" onClick={() => setShowCertificateModal(false)}>
+                                Close
+                            </button>
+                            <button type="button" className="sm-thm-btn" onClick={() => window.print()}>
+                                Print / Download PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {showCertificateModal && <div className="modal-backdrop fade show"></div>}
+
+            {/* Order Details Modal */}
+            <div className={`modal step-modal fade ${showOrderModal ? 'show d-block' : ''}`} 
+                 style={{ display: showOrderModal ? 'block' : 'none' }} 
+                 id="view-Order" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
+                 aria-labelledby="orderModalLabel" aria-hidden={!showOrderModal}>
+                <div className="modal-dialog modal-dialog-centered modal-lg">
+                    <div className="modal-content custom-modal-box">
+                        <div className="text-end">
+                            <button type="button" className="modal-close-btn" onClick={() => setShowOrderModal(false)}>
+                                <FontAwesomeIcon icon={faClose} />
+                            </button>
+                        </div>
+                        <div className="d-flex align-items-center justify-content-between popup-nw-brd px-4">
+                            <div>
+                                <h6 className="lg_title mb-0" style={{ color: 'black' }}>Order Details</h6>
+                            </div>
+                        </div>
+                        <div className="modal-body px-4">
+                            {viewingOrder && (
+                                <div className="order-details-view">
+                                    <div className="row mb-4">
+                                        <div className="col-sm-6">
+                                            <p className="mb-0 text-muted small">Order ID</p>
+                                            <h6 className="fw-bold">#{viewingOrder.orderId}</h6>
+                                        </div>
+                                        <div className="col-sm-6 text-sm-end">
+                                            <p className="mb-0 text-muted small">Date</p>
+                                            <h6 className="fw-bold">{new Date(viewingOrder.createdAt).toLocaleDateString()}</h6>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-light p-3 rounded mb-4">
+                                        <div className="row align-items-center">
+                                            <div className="col-3 col-md-2">
+                                                <img 
+                                                    src={viewingOrder.courseId?.courseImage || viewingOrder.courseId?.thumbnail || "/pic_01.jpg"} 
+                                                    alt={viewingOrder.courseId?.title} 
+                                                    className="img-fluid rounded"
+                                                    style={{ maxHeight: '60px', objectFit: 'cover' }}
+                                                />
+                                            </div>
+                                            <div className="col-9 col-md-10">
+                                                <p className="mb-0 text-muted small">Purchased Course</p>
+                                                <h6 className="fw-bold mb-0">{viewingOrder.courseId?.title}</h6>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="row mb-4">
+                                        <div className="col-6">
+                                            <p className="mb-0 text-muted small">Payment Method</p>
+                                            <h6 className="fw-bold">{viewingOrder.paymentMethod || 'UPI/Online'}</h6>
+                                        </div>
+                                        <div className="col-6 text-end">
+                                            <p className="mb-0 text-muted small">Status</p>
+                                            <span className={`badge ${viewingOrder.paymentStatus === 'completed' ? 'bg-success' : 'bg-warning'} text-white`}>
+                                                {viewingOrder.paymentStatus === 'completed' ? 'Paid' : 'Pending'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="border-top pt-3">
+                                        <div className="d-flex justify-content-between mb-2">
+                                            <span className="text-muted">Course Price</span>
+                                            <span>₹{viewingOrder.amount}</span>
+                                        </div>
+                                        <div className="d-flex justify-content-between mb-2">
+                                            <span className="text-muted">Tax & Fees</span>
+                                            <span>₹0.00</span>
+                                        </div>
+                                        <hr />
+                                        <div className="d-flex justify-content-between align-items-center">
+                                            <h5 className="mb-0 fw-bold">Total Amount</h5>
+                                            <h5 className="mb-0 text-primary fw-bold">₹{viewingOrder.amount}</h5>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="modal-footer px-4">
+                            <button type="button" className="sm-thm-btn outline" onClick={() => setShowOrderModal(false)}>
+                                Close
+                            </button>
+                            <button type="button" className="sm-thm-btn" onClick={() => window.print()}>
+                                <FontAwesomeIcon icon={faDownload} className="me-2" />
+                                Print / Download Receipt
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {showOrderModal && <div className="modal-backdrop fade show"></div>}
         </>
     );
 }
