@@ -3,10 +3,15 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
 import { useNavigate } from "react-router-dom";
+import { syncCartWithPurchases } from "../../services/apiService";
+import { useAuth } from "../../contexts/AuthContext";
+import { getLangText } from "../../utils/languageUtils";
 
 function AddCart() {
     const [cartItems, setCartItems] = useState([]);
     const [loading, setLoading] = useState(true);
+    const { user } = useAuth();
+    const userLanguage = user?.profile?.language || 'English';
     const navigate = useNavigate();
 
     // Load cart items from localStorage
@@ -45,6 +50,10 @@ function AddCart() {
             window.removeEventListener('storage', handleStorageChange);
             window.removeEventListener('focus', handleStorageChange);
         };
+    }, []);
+
+    useEffect(() => {
+        syncCartWithPurchases(); // Clean cart from purchased items on mount
     }, []);
     useEffect(() => {
 
@@ -151,7 +160,7 @@ function AddCart() {
                                     <div className="text-center py-5">
                                         <h4>Your cart is empty</h4>
                                         <p className="text-muted mb-4">Add some courses to get started!</p>
-                                        <Link to="/my-course" className="thm-btn">
+                                        <Link to="/available-courses" className="thm-btn">
                                             Browse Courses
                                         </Link>
                                     </div>
@@ -165,13 +174,13 @@ function AddCart() {
                                                     <div className="cart-banner-box">
                                                         <img 
                                                             src={item.thumbnail || "/thumb-banner.png"} 
-                                                            alt={item.title} 
+                                                            alt={getLangText(item.title, userLanguage)} 
                                                          
                                                         />
                                                     </div>
 
                                                     <div className="cart-details-bx">
-                                                        <h6>{typeof item.title === 'string' ? item.title : "Course Title"}</h6>
+                                                        <h6>{getLangText(item.title, userLanguage) || "Course Title"}</h6>
                                                         <p>
                                                             <FontAwesomeIcon icon={faUser} className="user-summary-icon" /> 
                                                             {typeof item.instructor === 'string' ? item.instructor : "Instructor"}
@@ -266,7 +275,7 @@ function AddCart() {
                                                 </button>
                                             </div> */}
                                             <div className="d-flex align-items-center gap-3 cart-shoping-box">
-                                                <Link to="/home-second" className="thm-btn outline">
+                                                <Link to="/" className="thm-btn outline">
                                                     Continue Shopping
                                                 </Link>
                                                <Link

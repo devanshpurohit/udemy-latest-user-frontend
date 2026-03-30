@@ -4,9 +4,13 @@ import '@splidejs/react-splide/css';
 import { NavLink } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUser, faStar, faStarHalf } from '@fortawesome/free-solid-svg-icons';
+import { useAuth } from '../../contexts/AuthContext';
+import { getLangText } from '../../utils/languageUtils';
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa";
 
 const TopLearningSlider = ({ topLearningCourses = [], loading, error, onRetry, splideRef }) => {
+    const { user } = useAuth();
+    const userLanguage = user?.profile?.language || 'English';
     const goPrev = () => {
         splideRef.current?.splide.go("<");
     };
@@ -72,12 +76,12 @@ const TopLearningSlider = ({ topLearningCourses = [], loading, error, onRetry, s
                                    <div className='udemy-picture'>
                                      <img 
                                         src={course.thumbnail || course.courseImage || "/course_01.png"} 
-                                        alt={course.title}
+                                        alt={getLangText(course.title, userLanguage)}
                                     />
                                    </div>
                                     <div className="card-body">
-                                        <h6>{course.title}</h6>
-                                        <p>{course.description ? course.description.substring(0, 80) + '...' : 'Course description not available'}</p>
+                                        <h6>{getLangText(course.title, userLanguage)}</h6>
+                                        <p>{getLangText(course.description, userLanguage) ? (getLangText(course.description, userLanguage).length > 100 ? getLangText(course.description, userLanguage).substring(0, 100) + '...' : getLangText(course.description, userLanguage)) : 'Course description not available'}</p>
                                         <div className="d-flex justify-content-between align-items-center">
                                             <small className="text-muted">
                                                 <FontAwesomeIcon icon={faUser} className="me-1" />
@@ -88,11 +92,23 @@ const TopLearningSlider = ({ topLearningCourses = [], loading, error, onRetry, s
                                         <div className="d-flex justify-content-between align-items-center mt-2">
                                             <span >₹{course.price || '999'}</span>
                                             <div className="rating-stars">
-                                                <FontAwesomeIcon icon={faStar} style={{color: '#ffc107', fontSize: '12px'}} />
-                                                <FontAwesomeIcon icon={faStar} style={{color: '#ffc107', fontSize: '12px'}} />
-                                                <FontAwesomeIcon icon={faStar} style={{color: '#ffc107', fontSize: '12px'}} />
-                                                <FontAwesomeIcon icon={faStar} style={{color: '#ffc107', fontSize: '12px'}} />
-                                                <FontAwesomeIcon icon={faStarHalf} style={{color: '#ffc107', fontSize: '12px'}} />
+                                                {[...Array(5)].map((_, index) => {
+                                                    const starValue = index + 1;
+                                                    const rating = course.averageRating || 0;
+                                                    return (
+                                                        <FontAwesomeIcon
+                                                            key={index}
+                                                            icon={rating >= starValue ? faStar : rating >= starValue - 0.5 ? faStarHalf : faStar}
+                                                            style={{ 
+                                                                color: rating >= starValue ? '#ffc107' : rating >= starValue - 0.5 ? '#ffc107' : '#e4e5e9',
+                                                                fontSize: '12px'
+                                                            }}
+                                                        />
+                                                    );
+                                                })}
+                                                <small className="ms-1" style={{ fontSize: '11px' }}>
+                                                    {course.averageRating?.toFixed(1) || "0.0"}
+                                                </small>
                                             </div>
                                         </div>
                                     </div>

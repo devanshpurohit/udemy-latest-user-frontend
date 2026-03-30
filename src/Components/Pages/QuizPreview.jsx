@@ -79,7 +79,7 @@ function QuizPreview() {
                                             <a href="/" className="breadcrumb-link">Home</a>
                                         </li>
                                         <li className="breadcrumb-item">
-                                            <a href="/my-course" className="breadcrumb-link">Course</a>
+                                            <a href="/available-courses" className="breadcrumb-link">Courses</a>
                                         </li>
                                         <li className="breadcrumb-item active" aria-current="page">
                                             Quiz Preview
@@ -93,7 +93,7 @@ function QuizPreview() {
                 </div>
             </section>
 
-            <section className="course-section">
+            <section className="course-section pt-0">
                 <div className="container">
                     <div className="row">
                         <div className="col-lg-12">

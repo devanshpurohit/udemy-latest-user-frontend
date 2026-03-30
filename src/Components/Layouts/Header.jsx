@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { toast } from "react-toastify";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronDown, faClose, faEnvelope, faEye, faPhone, faTimes, faUser, faShoppingCart, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
-import { FaUser } from "react-icons/fa";
+import { faChevronDown, faClose, faEnvelope, faEye, faPhone, faTimes, faUser, faShoppingCart, faEyeSlash, faLock } from "@fortawesome/free-solid-svg-icons";
+import { FaUser, FaComments } from "react-icons/fa";
 import { NavLink, useNavigate } from "react-router-dom";
 import { BsCreditCardFill } from "react-icons/bs";
 import { IoInformationCircle } from "react-icons/io5";
@@ -39,6 +39,8 @@ const Header = () => {
     const [regEmail, setRegEmail] = useState('');
     const [regPhone, setRegPhone] = useState('');
     const [regPassword, setRegPassword] = useState('');
+    const [regConfirmPassword, setRegConfirmPassword] = useState('');
+    const [regLanguage, setRegLanguage] = useState('English');
     const [regOtp, setRegOtp] = useState(['', '', '', '']);
     const [regLoading, setRegLoading] = useState(false);
     const [regError, setRegError] = useState('');
@@ -131,10 +133,14 @@ const Header = () => {
                 setUsername('');
                 setPassword('');
 
-                // Navigate to dashboard
-                navigate('/home-second');
+                // Navigate to home
+                navigate('/');
             } else {
-                setError(result.error);
+                if (result.error && (result.error.toLowerCase().includes('device') || result.error.toLowerCase().includes('approval'))) {
+                    toast.warning(result.error);
+                } else {
+                    setError(result.error);
+                }
             }
         } catch (err) {
             setError('An unexpected error occurred. Please try again.');
@@ -247,40 +253,37 @@ const Header = () => {
         }
     };
 
-    // Registration Step 1: Verify AI Card
-    const handleCardVerify = async (e) => {
+    // Registration Step 1: Basic Info
+    const handleBasicInfoSubmit = (e) => {
         e.preventDefault();
         setRegError('');
-        setRegLoading(true);
-        try {
-            const result = await verifyAICard(regCardNumber, regCvv);
-            if (result.success) {
-                setRegStep(2);
-                hideModal('register');
-                showModal('registerProfile');
-            } else {
-                setRegError(result.error);
-            }
-        } catch (err) {
-            setRegError('Verification failed');
-        } finally {
-            setRegLoading(false);
+        
+        if (regPassword !== regConfirmPassword) {
+            setRegError('Passwords do not match');
+            return;
         }
+        
+        if (regPassword.length < 6) {
+            setRegError('Password must be at least 6 characters long');
+            return;
+        }
+
+        setRegStep(2);
+        hideModal('register');
+        showModal('registerProfile');
     };
 
-    // Registration Step 2: Profile Registration
-    const handleRegistration = async (e) => {
-        e.preventDefault();
+    // Registration Step 2: Profile Registration (Card Details or Skip)
+    const handleRegistration = async (e, skipCard = false) => {
+        if (e) e.preventDefault();
         setRegError('');
         setRegLoading(true);
         try {
             const userData = {
-                username: regUsername,
                 email: regEmail,
-                phone: regPhone,
                 password: regPassword,
-                cardNumber: regCardNumber,
-                cvv: regCvv
+                language: regLanguage,
+                ...(skipCard ? {} : { cardNumber: regCardNumber, cvv: regCvv })
             };
             const result = await authRegister(userData);
             if (result.success) {
@@ -318,12 +321,14 @@ const Header = () => {
                 setRegStep(1);
                 setRegCardNumber('');
                 setRegCvv('');
+                setRegLanguage('English');
+                setRegConfirmPassword('');
                 setRegUsername('');
                 setRegEmail('');
                 setRegPhone('');
                 setRegPassword('');
                 setRegOtp(['', '', '', '']);
-                navigate('/home-second');
+                navigate('/');
             } else {
                 setRegError(result.error);
             }
@@ -480,8 +485,8 @@ const Header = () => {
 
 
                                 <li className="nav-item">
-                                    <NavLink to="/my-course" className="nav-link" href="#" onClick={closeMenu}>
-                                        Course
+                                    <NavLink to="/available-courses" className="nav-link" href="#" onClick={closeMenu}>
+                                        Courses
                                     </NavLink>
                                 </li>
 
@@ -491,14 +496,20 @@ const Header = () => {
                                     </NavLink>
                                 </li>
 
+                                {/* <li className="nav-item">
+                                    <NavLink to="/feedback" className="nav-link" onClick={closeMenu}>
+                                        Feedback
+                                    </NavLink>
+                                </li> */}
+
                                 <li className="nav-item">
                                     <NavLink to="/contact-us" className="nav-link" href="#" onClick={closeMenu}>
-                                        Contact Us
+                                        Contact
                                     </NavLink>
                                 </li>
                             </ul>
 
-                            <div className="d-flex align-items-center gap-2 flex-wrap">
+                            <div className="d-flex align-items-center gap-2 flex-wrap mobile-side-box">
 
 
 
@@ -556,7 +567,7 @@ const Header = () => {
                                     <div className="login-container">
                                         <div className="login-header-content">
                                             <div className="lg_sub_content">
-                                                <h4>Log in to your {settings.siteName || "websitename"} Account</h4>
+                                                <h4>Log in to your {settings.siteName || "Udemy Clone"} Account</h4>
                                             </div>
 
                                             <form onSubmit={handleLogin}>
@@ -567,15 +578,15 @@ const Header = () => {
                                                 )}
                                                 <div className="custom-frm-bx">
                                                     <input
-                                                        type="text"
+                                                        type="email"
                                                         className="form-control profile-control pe-5"
-                                                        placeholder="Enter Username"
+                                                        placeholder="Enter Email ID"
                                                         value={username}
                                                         onChange={(e) => setUsername(e.target.value)}
                                                         required
                                                     />
                                                     <div className="pass-toggle-box">
-                                                        <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faUser} />
+                                                        <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faEnvelope} />
                                                         </button>
                                                     </div>
                                                 </div>
@@ -608,7 +619,7 @@ const Header = () => {
                                                                 <label htmlFor="check1" className='remember-title mb-0'>Remember Me</label>
                                                             </div>
                                                         </div>
-
+ 
                                                         <div className=''>
                                                             <NavLink to="/forgot-password" className='reset-pass-btn' data-bs-toggle="modal" data-bs-target="#forgotPasswordModal">Forgot Password?</NavLink>
                                                         </div>
@@ -621,7 +632,7 @@ const Header = () => {
                                                             className="nw-thm-btn w-100"
                                                             disabled={loading}
                                                         >
-                                                            {loading ? 'Logging in...' : 'Login'}
+                                                            {loading ? "Logging in..." : "Login"}
                                                         </button>
                                                     </div>
                                                 </div>
@@ -701,7 +712,7 @@ const Header = () => {
                                                 <div className="my-4">
                                                     <div>
                                                         <button type="submit" className="nw-thm-btn w-100" disabled={forgotLoading}>
-                                                            {forgotLoading ? 'Loading...' : 'Continue'}
+                                                            {forgotLoading ? 'Loading...' : "Continue"}
                                                         </button>
                                                         <div className="my-3 text-center">
                                                             <a href="#" className="card-back-btn" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#loginModal">Back</a>
@@ -751,61 +762,87 @@ const Header = () => {
                                     <div className="login-container">
                                         <div className="login-header-content">
                                             <div className="lg_sub_content">
-                                                <h4>Register to your {settings.siteName || "website name"} Account</h4>
+                                                <h4>Register to your {settings.siteName || "Udemy Clone"} Account</h4>
                                             </div>
 
-                                            <form onSubmit={handleCardVerify}>
+                                            <form onSubmit={handleBasicInfoSubmit}>
                                                 {regError && <div className="alert alert-danger">{regError}</div>}
                                                 <div className="custom-frm-bx">
                                                     <input
-                                                        type="number"
+                                                        type="email"
                                                         className="form-control profile-control pe-5"
-                                                        placeholder="Enter 12 Digit Card Number"
+                                                        placeholder="Email Address"
                                                         required
-                                                        value={regCardNumber}
-                                                        onChange={(e) => setRegCardNumber(e.target.value)}
+                                                        value={regEmail}
+                                                        onChange={(e) => setRegEmail(e.target.value)}
                                                     />
                                                     <div className="pass-toggle-box">
-                                                        <button type="button" className="pass-eye-btn"> <BsCreditCardFill />
+                                                        <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faEnvelope} />
                                                         </button>
                                                     </div>
                                                 </div>
-                                                <div className="custom-frm-bx mb-2">
+                                                <div className="custom-frm-bx">
                                                     <input
-                                                        type="password"
+                                                        type={showPassword ? "text" : "password"}
                                                         className="form-control profile-control pe-5"
-                                                        placeholder="CVV Number"
+                                                        placeholder="Create Password"
                                                         required
-                                                        value={regCvv}
-                                                        onChange={(e) => setRegCvv(e.target.value)}
+                                                        value={regPassword}
+                                                        onChange={(e) => setRegPassword(e.target.value)}
                                                     />
+                                                    <div className="pass-toggle-box">
+                                                        <button
+                                                            type="button"
+                                                            className="pass-eye-btn"
+                                                            onClick={() => setShowPassword(!showPassword)}
+                                                        >
+                                                            <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <div className="text-center">
-                                                    <span className="card-already-title">Enter your AI card details to proceed with registration.</span>
+                                                <div className="custom-frm-bx">
+                                                    <input
+                                                        type={showPassword ? "text" : "password"}
+                                                        className="form-control profile-control pe-5"
+                                                        placeholder="Confirm Password"
+                                                        required
+                                                        value={regConfirmPassword}
+                                                        onChange={(e) => setRegConfirmPassword(e.target.value)}
+                                                    />
+                                                    <div className="pass-toggle-box">
+                                                        <button
+                                                            type="button"
+                                                            className="pass-eye-btn"
+                                                            onClick={() => setShowPassword(!showPassword)}
+                                                        >
+                                                            <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
+                                                        </button>
+                                                    </div>
                                                 </div>
 
-                                                <div className="mt-5">
+                                                <div className="custom-frm-bx">
+                                                    <select
+                                                        className="form-control profile-control"
+                                                        value={regLanguage}
+                                                        onChange={(e) => setRegLanguage(e.target.value)}
+                                                        required
+                                                        style={{ appearance: 'auto' }}
+                                                    >
+                                                        <option value="English">English</option>
+                                                        <option value="Kannada">Kannada</option>
+                                                    </select>
+                                                </div>
+
+                                                <div className="mt-4">
                                                     <div>
-                                                        <button type="submit" className="nw-thm-btn w-100" disabled={regLoading}>
-                                                            {regLoading ? 'Verifying...' : 'Continue'}
+                                                        <button type="submit" className="nw-thm-btn w-100">
+                                                            Continue
                                                         </button>
                                                     </div>
 
                                                     <div className="my-3 text-center">
                                                         <a href="#" className="card-back-btn" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#loginModal">Back</a>
                                                     </div>
-                                                </div>
-
-                                                <div className="udemy-tp-line">
-                                                    <p>Already registered your AI Card? <button
-                                                        type="button"
-                                                        className="udemy-back-login"
-                                                        data-bs-dismiss="modal"
-                                                        data-bs-toggle="modal"
-                                                        data-bs-target="#loginModal"
-                                                    >
-                                                        Login
-                                                    </button> </p>
                                                 </div>
                                             </form>
                                         </div>
@@ -847,96 +884,57 @@ const Header = () => {
                                     <div className="login-container">
                                         <div className="login-header-content">
                                             <div className="lg_sub_content">
-                                                <h4>Complete Your Profile</h4>
+                                                <h4>AI Card Details (Optional)</h4>
+                                                <p className="text-muted fz-14 mt-1">If you have an AI card, enter details below. Otherwise, you can skip this step.</p>
                                             </div>
 
-                                            <form onSubmit={handleRegistration}>
+                                            <form onSubmit={(e) => handleRegistration(e, false)}>
                                                 {regError && <div className="alert alert-danger">{regError}</div>}
                                                 <div className='row'>
-                                                    <div className='col-lg-6'>
-                                                        <div className="custom-frm-bx">
-                                                            <input
-                                                                type="text"
-                                                                className="form-control profile-control"
-                                                                placeholder="Username"
-                                                                required
-                                                                value={regUsername}
-                                                                onChange={(e) => setRegUsername(e.target.value)}
-                                                            />
-
-                                                        </div>
-                                                    </div>
-
-                                                    <div className='col-lg-6'>
-                                                        <div className="custom-frm-bx">
-                                                            <input
-                                                                type="text"
-                                                                className="form-control profile-control"
-                                                                placeholder="Email Address"
-                                                                required
-                                                                value={regEmail}
-                                                                onChange={(e) => setRegEmail(e.target.value)}
-                                                            />
-                                                        </div>
-                                                    </div>
-
                                                     <div className='col-lg-12'>
                                                         <div className="custom-frm-bx">
                                                             <input
-                                                                type="password"
-                                                                className="form-control profile-control pe-5"
-                                                                placeholder="Password"
-                                                                required
-                                                                value={regPassword}
-                                                                onChange={(e) => setRegPassword(e.target.value)}
+                                                                type="text"
+                                                                className="form-control profile-control"
+                                                                placeholder="Card Number"
+                                                                value={regCardNumber}
+                                                                onChange={(e) => setRegCardNumber(e.target.value)}
                                                             />
-
                                                             <div className="pass-toggle-box">
-                                                                <button type="button" className="pass-eye-btn" onClick={() => setShowPassword(!showPassword)}>
-                                                                    <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
+                                                                <button type="button" className="pass-eye-btn"> <BsCreditCardFill />
                                                                 </button>
                                                             </div>
                                                         </div>
                                                     </div>
 
                                                     <div className='col-lg-12'>
-                                                        <div class="custom-frm-bx">
-                                                            <div class="login-custm-bx">
-                                                                <select
-                                                                    name="countryCode"
-                                                                    id="countryCode"
-                                                                    class="country-code "
-                                                                >
-                                                                    <option value="+91">+91</option>
-                                                                    <option value="+1">+1</option>
-                                                                    <option value="+44">+44</option>
-                                                                    <option value="+971">+971</option>
-                                                                </select>
-
-                                                                <input
-                                                                    type="tel"
-                                                                    id="mobileNumber"
-                                                                    placeholder="Mobile Number"
-                                                                    class="form-control border-0 px-0 profile-control"
-                                                                    required
-                                                                    value={regPhone}
-                                                                    onChange={(e) => setRegPhone(e.target.value)}
-                                                                />
-                                                            </div>
-
+                                                        <div className="custom-frm-bx">
+                                                            <input
+                                                                type="text"
+                                                                className="form-control profile-control"
+                                                                placeholder="CVV"
+                                                                value={regCvv}
+                                                                onChange={(e) => setRegCvv(e.target.value)}
+                                                            />
                                                             <div className="pass-toggle-box">
-                                                                <button type="button" className="pass-eye-btn">  <FontAwesomeIcon icon={faPhone} />
+                                                                <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faLock} />
                                                                 </button>
                                                             </div>
-
                                                         </div>
-
                                                     </div>
 
                                                     <div className="mt-4">
-                                                        <div>
+                                                        <div className="d-flex gap-3">
+                                                            <button 
+                                                                type="button" 
+                                                                className="nw-thm-btn outline w-100" 
+                                                                onClick={(e) => handleRegistration(e, true)}
+                                                                disabled={regLoading}
+                                                            >
+                                                                Skip
+                                                            </button>
                                                             <button type="submit" className="nw-thm-btn w-100" disabled={regLoading}>
-                                                                {regLoading ? 'Registering...' : 'Register'}
+                                                                {regLoading ? 'Processing...' : 'Verify & Continue'}
                                                             </button>
                                                         </div>
 
@@ -1090,7 +1088,7 @@ const Header = () => {
                                                 {forgotError && <div className="alert alert-danger">{forgotError}</div>}
                                                 <div className="custom-frm-bx">
                                                     <input
-                                                        type="password"
+                                                        type={showPassword ? "text" : "password"}
                                                         className="form-control profile-control pe-5"
                                                         placeholder="Enter New Password (min 6 chars)"
                                                         required
@@ -1098,21 +1096,34 @@ const Header = () => {
                                                         onChange={(e) => setForgotNewPassword(e.target.value)}
                                                     />
                                                     <div className="pass-toggle-box">
-                                                        <button type="button" className="pass-eye-btn"> <FontAwesomeIcon icon={faEye} />
+                                                        <button
+                                                            type="button"
+                                                            className="pass-eye-btn"
+                                                            onClick={() => setShowPassword(!showPassword)}
+                                                        >
+                                                            <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
                                                         </button>
                                                     </div>
                                                 </div>
 
                                                 <div className="custom-frm-bx mb-1" >
                                                     <input
-                                                        type="password"
+                                                        type={showPassword ? "text" : "password"}
                                                         className="form-control profile-control pe-5"
                                                         placeholder="Confirm Password"
                                                         required
                                                         value={forgotConfirmPassword}
                                                         onChange={(e) => setForgotConfirmPassword(e.target.value)}
                                                     />
-
+                                                    <div className="pass-toggle-box">
+                                                        <button
+                                                            type="button"
+                                                            className="pass-eye-btn"
+                                                            onClick={() => setShowPassword(!showPassword)}
+                                                        >
+                                                            <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
+                                                        </button>
+                                                    </div>
                                                 </div>
 
 

@@ -3,8 +3,13 @@ import { getBackendUrl } from '../../config/backendConfig';
 import { Link } from 'react-router-dom';
 import { faStar, faClock, faUsers, faRupeeSign } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { useAuth } from '../../contexts/AuthContext';
+import { getLangText } from '../../utils/languageUtils';
+import config from '../../config/config';
 
 function CoursesList() {
+  const { user } = useAuth();
+  const userLanguage = user?.profile?.language || 'English';
   const [courses, setCourses] = useState([]);
   const [allCourses, setAllCourses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -142,7 +147,7 @@ function CoursesList() {
                     <img 
                       src={course.thumbnail || course.courseImage} 
                       className="card-img-top" 
-                      alt={course.title}
+                      alt={getLangText(course.title, userLanguage)}
                       style={{ height: '200px', objectFit: 'cover' }}
                     />
                   ) : (
@@ -164,12 +169,12 @@ function CoursesList() {
 
                 <div className="card-body d-flex flex-column">
                   {/* Course Title */}
-                  <h5 className="card-title">{course.title}</h5>
+                  <h5 className="card-title">{getLangText(course.title, userLanguage)}</h5>
                   
                   {/* Course Description */}
                   <p className="card-text text-muted flex-grow-1">
-                    {course.description ? 
-                      course.description.substring(0, 100) + '...' : 
+                    {getLangText(course.description, userLanguage) ? 
+                      (getLangText(course.description, userLanguage).length > 100 ? getLangText(course.description, userLanguage).substring(0, 100) + '...' : getLangText(course.description, userLanguage)) : 
                       'No description available'
                     }
                   </p>

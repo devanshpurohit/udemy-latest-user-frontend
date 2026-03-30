@@ -9,6 +9,7 @@ import { toast } from "react-toastify";
 
 
 
+
 function Footer() {
     const { settings } = useSettings();
     const { user } = useAuth();
@@ -21,10 +22,7 @@ function Footer() {
             return;
         }
 
-        if (!user || email !== user.email) {
-            toast.error("please enter your login mail");
-            return;
-        }
+        // Allow any email to subscribe regardless of login status
 
         try {
             setLoading(true);
@@ -49,8 +47,8 @@ function Footer() {
                 <div className="container">
                     <div className="row">
                         <div className="col-lg-4 col-md-6 col-sm-12 mb-4">
-                            <div className="d-flex align-items-center mb-3">
-                                <a href="#"><img src={settings.logoUrl || "/white-Logo.png"} alt={settings.siteName || "Logo"} className="footer-logo" /></a>
+                            <div className="d-flex align-items-center">
+                                <a href="#"><img src={settings.logoUrl || "/Logo.png"} alt={settings.siteName || "Logo"} className="footer-logo" /></a>
                             </div>
 
                             <div className="footer-text">
@@ -71,10 +69,10 @@ function Footer() {
                         </div>
 
                         <div className="col-lg-2 col-md-6 col-sm-12  mb-4">
-                            <h5 className="sub-title">Quick company</h5>
+                            <h5 className="sub-title">Quick Company</h5>
                             <ul className="footer-links">
                                 <li className="footer-item"> <NavLink to="/" className="footer-nav-link">Home</NavLink></li>
-                            <li className="footer-item"> <NavLink to="/my-course" className="footer-nav-link">Courses</NavLink> </li>
+                            <li className="footer-item"> <NavLink to="/available-courses" className="footer-nav-link">Courses</NavLink> </li>
 
                             </ul>
                         </div>
@@ -90,24 +88,24 @@ function Footer() {
 
                             <h5 className="sub-title">Legal</h5>
                             <ul className="footer-links">
-                                <li className="footer-item"> <NavLink to="/term-condition" className="footer-nav-link">Terms and conditions</NavLink> </li>
-                                <li className="footer-item"> <NavLink to="/privacy-policy" className="footer-nav-link">Privacy policy</NavLink> </li>
-                                <li className="footer-item"> <NavLink to="/cookies-policy" className="footer-nav-link">Cookies policy</NavLink> </li>
-                                <li className="footer-item"> <NavLink to="/license-agreement" className="footer-nav-link">License agreement</NavLink> </li>
+                                <li className="footer-item"> <NavLink to="/term-condition" className="footer-nav-link">Terms & Conditions</NavLink> </li>
+                                <li className="footer-item"> <NavLink to="/privacy-policy" className="footer-nav-link">Privacy Policy</NavLink> </li>
+                                <li className="footer-item"> <NavLink to="/cookies-policy" className="footer-nav-link">Cookies Policy</NavLink> </li>
+                                <li className="footer-item"> <NavLink to="/license-agreement" className="footer-nav-link">License Agreement</NavLink> </li>
                             </ul>
                         </div>
 
                         <div className="col-lg-4 col-md-6 col-sm-12 mb-lg-4 mb-sm-0">
                             <div className="subscribe-content">
-                                <h5 className="sub-title">Subscribe US</h5>
-                                <p>Subscribe to the free newsletter and stay <span className="d-lg-block d-sm-inline">up to date</span> </p>
+                                <h5 className="sub-title">Subscribe Us</h5>
+                                <p>Subscribe our newsletter to get our latest update & news. </p>
 
                                 <div className="email-footer-box">
                                     <div className="custom-frm-bx">
                                         <input 
                                             type="email" 
                                             className="form-control email-frm-control" 
-                                            placeholder="Your email address" 
+                                            placeholder="Enter your email" 
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
                                         />

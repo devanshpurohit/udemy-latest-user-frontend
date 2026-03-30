@@ -6,7 +6,8 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import config from "../../config/config";
-import { submitQuizScore } from "../../services/apiService";
+import { useAuth } from "../../contexts/AuthContext";
+import { getLangText } from "../../utils/languageUtils";
 
 
 function Quiz() {
@@ -14,6 +15,8 @@ function Quiz() {
     const navigate = useNavigate();
     const { courseId, lessonId, quizId } = useParams();
 
+    const { user } = useAuth();
+    const userLanguage = user?.profile?.language || 'English';
     const [quizzes, setQuizzes] = useState([]);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [userAnswers, setUserAnswers] = useState({});
@@ -80,14 +83,8 @@ function Quiz() {
     const normalizedOptions = useMemo(() => {
         const raw = currentQuiz?.options;
         if (!Array.isArray(raw)) return [];
-        return raw
-            .map((opt) => {
-                if (typeof opt === "string") return opt;
-                if (opt && typeof opt === "object") return opt.text ?? opt.label ?? opt.value ?? "";
-                return String(opt ?? "");
-            })
-            .filter(Boolean);
-    }, [currentQuiz]);
+        return raw.map((opt) => getLangText(opt, userLanguage) || String(opt || "")).filter(Boolean);
+    }, [currentQuiz, userLanguage]);
 
     const handleSelectAnswer = (option) => {
         if (currentQuiz) {
@@ -123,8 +120,8 @@ function Quiz() {
 
         if (selectedAnswer === correctOptionText) {
             // Correct - Show Success Modal
-            setScore(1); 
-            
+            setScore(1);
+
             // 🔥 Submit score to backend
             submitQuizScore(courseId, lessonId, 100).then(res => {
                 if (res.success) {
@@ -166,7 +163,7 @@ function Quiz() {
                                             <a href="/" className="breadcrumb-link">Home</a>
                                         </li>
                                         <li className="breadcrumb-item">
-                                            <a href="/my-course" className="breadcrumb-link">Course</a>
+                                            <a href="/available-courses" className="breadcrumb-link">Courses</a>
                                         </li>
                                         <li className="breadcrumb-item active" aria-current="page">
                                             Quiz
@@ -180,14 +177,14 @@ function Quiz() {
                 </div>
             </section>
 
-            <section className="course-section">
+            <section className="course-section pt-0">
                 <div className="container">
                     <div className="row">
                         <div className="col-lg-12">
                             <div className="udemy-quiz-card">
                                 <div className="quiz-header">
                                     <div className="quiz-title">
-                                        <h4>{courseTitle || "Course Quiz"}</h4>
+                                        <h4>{getLangText(courseTitle, userLanguage) || "Course Quiz"}</h4>
                                     </div>
                                     <div className="quiz-info">
                                         <a href="#" className="quiz-info-btn"><FaInfoCircle /></a>
@@ -242,7 +239,7 @@ function Quiz() {
                                                 <>
                                                     <div className="umdey-title">
                                                         <h6>{currentQuestionIndex + 1}.</h6>
-                                                        <h5>{currentQuiz?.question || "Loading question..."}</h5>
+                                                        <h5>{getLangText(currentQuiz?.question, userLanguage) || "Loading question..."}</h5>
                                                     </div>
 
                                                     <div className="booklet-btm-bx">
@@ -336,8 +333,8 @@ function Quiz() {
                                         <span className="logout-icon"><IoLogOut /></span>
                                         <p className="py-3">Are You Sure You Want To Exit</p>
                                         <div className="d-flex align-items-center gap-3 justify-content-center mt-3">
-                                            <button 
-                                                className="thm-btn px-5" 
+                                            <button
+                                                className="thm-btn px-5"
                                                 onClick={() => {
                                                     const modalElement = document.getElementById("quiz-Exit");
                                                     const modalInstance = window.bootstrap.Modal.getInstance(modalElement);

@@ -3,19 +3,22 @@ import { toast } from "react-toastify";
 import { useAuth } from "../../contexts/AuthContext";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { getBackendBaseUrl } from "../../config/backendConfig";
+import config from "../../config/config";
+import { getCourseById, getCourseReviews, getDashboardData, syncCartWithPurchases, getCachedCourseById } from "../../services/apiService";
+import { getLangText } from "../../utils/languageUtils";
 
 import { MdWork } from "react-icons/md";
 import { FaClock } from "react-icons/fa6";
 import { IoSpeedometer } from "react-icons/io5";
 import { IoLanguage } from "react-icons/io5";
 import { PiCertificateFill } from "react-icons/pi";
-import { MdQuiz } from "react-icons/md";
+import { MdQuiz, MdSort } from "react-icons/md";
 import { FaFacebookF } from "react-icons/fa";
 import { FaLinkedinIn } from "react-icons/fa";
 import { FaWhatsapp } from "react-icons/fa";
 import { BsTelegram } from "react-icons/bs";
 import { FaPlay } from "react-icons/fa";
-import { faVideo, faClose, faLock } from "@fortawesome/free-solid-svg-icons";
+import { faVideo, faClose, faLock, faDownload } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { IoIosStar } from "react-icons/io";
 import { IoIosStarOutline } from "react-icons/io";
@@ -23,6 +26,20 @@ import { NavLink } from "react-router-dom";
 import { PiCardsThreeFill } from "react-icons/pi";
 import { MdDesktopWindows } from "react-icons/md";
 import { IoMdVideocam } from "react-icons/io";
+
+const normalizeMediaUrl = (url) => {
+    if (!url) return "/course_banner.png";
+    if (url.startsWith('http') || url.startsWith('data:')) return url;
+    let cleanPath = url.replace(/\\/g, '/');
+    if (cleanPath.includes('/uploads/')) {
+        cleanPath = '/uploads/' + cleanPath.split('/uploads/').pop();
+    }
+    if (!cleanPath.startsWith('/')) {
+        cleanPath = '/' + cleanPath;
+    }
+    const baseUrl = config.API_BASE_URL.replace('/api', '');
+    return encodeURI(`${baseUrl}${cleanPath}`.replace(/\/+/g, '/').replace(':/', '://'));
+};
 
 function CourseDetailsContentSecond({ course: propCourse }) {
     const [isReview, setIsReview] = useState(false);
@@ -41,7 +58,11 @@ function CourseDetailsContentSecond({ course: propCourse }) {
 
     // 🎯 Reviews State
     const [reviews, setReviews] = useState([]);
+    const [courseFAQs, setCourseFAQs] = useState([]);
+    const [faqLoading, setFaqLoading] = useState(false);
     const [reviewsLoading, setReviewsLoading] = useState(false);
+    const [sortReviewBy, setSortReviewBy] = useState('newest');
+    const [activeFaq, setActiveFaq] = useState(null);
 
     // 🎯 Get course ID from URL
     const { id } = useParams();
@@ -51,6 +72,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
 
     // 🎯 Auth Context
     const { user } = useAuth();
+    const userLanguage = user?.profile?.language || 'English';
     const isLoggedIn = !!user;
 
     // 🎯 Check if user is enrolled in this course
@@ -58,10 +80,8 @@ function CourseDetailsContentSecond({ course: propCourse }) {
         id => id.toString() === user?._id
     );
 
-    // 🎯 Check if user has purchased this course
-    const [isPurchased, setIsPurchased] = useState(false);
-    // default to true so redirect guard doesn't run before we start checking
-    const [isCheckingPurchase, setIsCheckingPurchase] = useState(true);
+    // 🎯 Check if user has purchased this course (Always false here since CourseGuard prevents purchased users from seeing this)
+    const isPurchased = false;
 
     const openLoginModal = () => {
         const el = document.getElementById("loginModal");
@@ -71,94 +91,39 @@ function CourseDetailsContentSecond({ course: propCourse }) {
         }
     };
 
-    // ❌ Remove automatic redirect - let user click manually
-    // useEffect(() => {
-    //     if (isPurchased && course?._id) {
-    //         console.log("✅ Course already purchased → redirecting to learn page");
-    //         navigate(`/course/${course._id}/learn`);
-    //     }
-    // }, [isPurchased, course]);
 
-    useEffect(() => {
-        // don't run until we have a valid course loaded
-        if (!course || !course._id) return;
-
-        const checkPurchaseStatus = async () => {
-            setIsCheckingPurchase(true);
-
-            try {
-                const token = localStorage.getItem("token");
-                if (!token) {
-                    setIsPurchased(false);
-                    setIsCheckingPurchase(false);
-                    return;
-                }
-
-                // ⚡ Optimized dashboard API with caching
-                // Check cache first for purchase status
-                // const purchaseCacheKey = `purchase_${course._id}`;
-                // const cachedPurchaseStatus = sessionStorage.getItem(purchaseCacheKey);
-
-                // if (cachedPurchaseStatus !== null) {
-                //     setIsPurchased(JSON.parse(cachedPurchaseStatus));
-                //     setIsCheckingPurchase(false);
-                //     return;
-                // }
-
-                // Only fetch dashboard if not cached
-                const res = await fetch(
-                    `${getBackendBaseUrl()}/api/users/dashboard`,
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
-                    }
-                );
-
-                const data = await res.json();
-
-                if (data.success && data.orders) {
-                    const orders = data.orders;
-
-                    const purchased = orders.some(
-                        order => {
-                            const orderCourseId = order.courseId?._id || order.courseId;
-                            const currentCourseId = course?._id || course?.id || course?._id;
-                            return orderCourseId.toString() === currentCourseId.toString();
-                        }
-                    );
-
-                    setIsPurchased(purchased);
-                    // Cache the result
-                    // sessionStorage.setItem(purchaseCacheKey, JSON.stringify(purchased));
-                } else {
-                    setIsPurchased(false);
-                    // sessionStorage.setItem(purchaseCacheKey, JSON.stringify(false));
-                }
-            } catch (error) {
-                console.log('Error checking purchase status:', error);
-                setIsPurchased(false);
-            } finally {
-                setIsCheckingPurchase(false);
-            }
-        };
-
-        checkPurchaseStatus();
-    }, [course]);
-
-
-    // 🎯 Handle quiz click
     const handleQuizClick = (quiz) => {
         setCurrentQuiz(quiz);
         setCurrentLesson(null);
         setShowVideo(false);
     };
 
-    // YouTube URL Check Function
     const isYouTube = (url) => {
         if (!url) return false;
         return url.includes("youtube.com") || url.includes("youtu.be");
     };
+
+    // 🎯 Fetch Course FAQs
+    useEffect(() => {
+        const fetchCourseFAQs = async () => {
+            const courseId = course?._id || id;
+            if (!courseId) return;
+            try {
+                setFaqLoading(true);
+                const response = await fetch(`${config.API_BASE_URL}/questions/course/${courseId}`);
+                const data = await response.json();
+                if (data.success) {
+                    setCourseFAQs(data.data);
+                }
+            } catch (error) {
+                console.error("❌ Fetch Course FAQs Error:", error);
+            } finally {
+                setFaqLoading(false);
+            }
+        };
+
+        fetchCourseFAQs();
+    }, [course?._id, id]);
 
     // Extract video ID from YouTube URL
     const extractVideoId = (url) => {
@@ -178,12 +143,12 @@ function CourseDetailsContentSecond({ course: propCourse }) {
     // Handle lesson click
     const handleLessonClick = (lesson) => {
         if (!isPurchased && user?.role !== 'admin') {
-            toast.info("first buy the course to access video");
+            toast.info("First buy the course to access the video.");
             return;
         }
-        setCurrentLesson(lesson);
-        setCurrentQuiz(null);
-        setShowVideo(true);
+        
+        const targetState = lesson ? { state: { lessonId: lesson._id } } : {};
+        navigate(`/course/${course._id}/learn`, targetState);
     };
 
 
@@ -206,6 +171,11 @@ function CourseDetailsContentSecond({ course: propCourse }) {
     const getAllLessonsForPagination = () => {
         if (!course?.sections) return [];
         return course.sections.flatMap(section => section.lessons || []);
+    };
+
+    const getFirstLesson = () => {
+        const allLessons = getAllLessonsForPagination();
+        return allLessons.length > 0 ? allLessons[0] : null;
     };
 
     // Get paginated lessons
@@ -251,7 +221,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
 
         const courseForCart = {
             _id: course._id,
-            title: course.title,
+            title: getLangText(course.title, userLanguage),
             price: course.discountedPrice || course.price,
             thumbnail: course.thumbnail || course.courseImage,
             instructor: course.instructor || 'Instructor',
@@ -356,17 +326,10 @@ function CourseDetailsContentSecond({ course: propCourse }) {
 
             try {
                 setReviewsLoading(true);
-
-                const res = await fetch(
-                    `${getBackendBaseUrl()}/api/reviews/${course._id}`
-                );
-
-                const data = await res.json();
-
-                if (data.success) {
-                    setReviews(data.data);
+                const res = await getCourseReviews(course._id, false);
+                if (res.success) {
+                    setReviews(res.data);
                 }
-
             } catch (error) {
                 console.log("Error fetching reviews:", error);
             } finally {
@@ -398,85 +361,34 @@ function CourseDetailsContentSecond({ course: propCourse }) {
         // Otherwise fetch from API
         const fetchCourse = async () => {
             try {
-                setLoading(true);
-                console.log("🔍 Fetching course id:", id);
+                // Instant cache check
+                const cached = getCachedCourseById(id);
+                if (cached && cached.data) {
+                    setCourse(cached.data);
+                    setLoading(false);
+                    console.log("⚡ CourseDetails: Instant cache hit upon mount");
+                } else if (!course) {
+                    setLoading(true);
+                }
 
-                // ⚡ Check cache first
-                // const cacheKey = `course_${id}`;
-                // const cachedCourse = sessionStorage.getItem(cacheKey);
-                // if (cachedCourse) {
-                //     const parsedCourse = JSON.parse(cachedCourse);
-                //     console.log("✅ Course loaded from cache:", parsedCourse.title);
-                //     setCourse(parsedCourse);
+                console.log("🔍 Fetching course id via apiService:", id);
 
-                //     // Auto-select first lesson for learning mode
-                //     if (parsedCourse.sections?.length > 0) {
-                //         const firstLesson = parsedCourse.sections[0].lessons?.[0];
-                //         if (firstLesson) {
-                //             setCurrentLesson(firstLesson);
-                //             setShowVideo(true);
-                //         }
-                //     }
-                //     setLoading(false);
-                //     return;
-                // }
+                const response = await getCourseById(id, false);
 
-                const backendUrl = getBackendBaseUrl();
-                console.log("🔍 API URL:", `${backendUrl}/api/public/courses/${id}`);
+                if (response.success && response.data) {
+                    const courseData = response.data.data || response.data; // Handle potential nesting
+                    setCourse(courseData);
+                    console.log("✅ Course loaded successfully:", courseData.title, response.fromCache ? "(from cache)" : "");
 
-                const res = await fetch(`${backendUrl}/api/public/courses/${id}`, {
-                    cache: "no-store"
-                });
-                console.log("🔍 Response status:", res.status);
-
-                const data = await res.json();
-                console.log("🔍 API response:", data);
-
-                if (data.success) {
-                    setCourse(data.data);
-                    // ⚡ Cache the course data
-
-                    console.log("✅ Course loaded successfully:", data.data.title);
-
-                    // Auto-select first lesson for learning mode
-                    if (data.data.sections?.length > 0) {
-                        const firstLesson = data.data.sections[0].lessons?.[0];
+                    if (courseData.sections?.length > 0) {
+                        const firstLesson = courseData.sections[0].lessons?.[0];
                         if (firstLesson) {
                             setCurrentLesson(firstLesson);
-                            // setShowVideo(true); // ❌ Remove auto-play
                         }
                     }
                 } else {
-                    console.error("❌ API returned failure:", data.message);
-
-                    // Try fallback
-                    try {
-                        console.log("🔄 Fetching all courses to check if course exists...");
-                        const coursesRes = await fetch(`${backendUrl}/api/public/courses`);
-                        const coursesData = await coursesRes.json();
-
-                        if (coursesData.success) {
-                            const courseExists = coursesData.data.some(c => c._id === id);
-                            console.log("🔍 Does course", id, "exist in all courses?", courseExists);
-
-                            if (courseExists) {
-                                const foundCourse = coursesData.data.find(c => c._id === id);
-                                console.log("🔍 Using fallback data for course:", id);
-                                setCourse(foundCourse);
-                                // ⚡ Cache fallback data too
-
-                                console.log("✅ Course loaded via fallback:", foundCourse.title);
-                            } else {
-                                console.log("❌ Requested course not found in list");
-                                const firstCourse = coursesData.data[0];
-                                window.location.href = `/course/${firstCourse._id}`;
-                            }
-                        }
-                    } catch (fallbackError) {
-                        console.error("❌ Could not fetch available courses:", fallbackError);
-                    }
+                    console.error("❌ Course fetch failed:", response.error);
                 }
-
             } catch (error) {
                 console.error("❌ Error fetching course:", error);
             } finally {
@@ -493,7 +405,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
     }, [id, propCourse]);
 
     // 🎯 Loading state
-    if (loading) {
+    if (loading && !course) {
         return (
             <div className="container py-5">
                 <div className="text-center">
@@ -527,7 +439,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                         <div className="col-lg-12">
                             <div className="d-flex align-items-center justify-content-center">
                                 <div>
-                                    <h3 className="lg_title text-center mb-2">Course Details</h3>
+                                    <h3 className="lg_title text-center mb-2">Courses Details</h3>
                                     <div className="admin-breadcrumb mt-2">
                                         <nav aria-label="breadcrumb">
                                             <ol className="breadcrumb custom-breadcrumb justify-content-center">
@@ -539,8 +451,8 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                 </li>
 
                                                 <li className="breadcrumb-item">
-                                                    <NavLink to="/my-course" className="breadcrumb-link">
-                                                        Course
+                                                    <NavLink to="/available-courses" className="breadcrumb-link">
+                                                        Courses
                                                     </NavLink>
                                                 </li>
 
@@ -576,10 +488,10 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                 className="thumbnail-container"
                                                 onClick={() => {
                                                     if (!isPurchased && user?.role !== 'admin') {
-                                                        toast.info("first buy the course to access video");
+                                                        toast.info("First buy the course to access the video.");
                                                         return;
                                                     }
-                                                    setShowVideo(true);
+                                                    navigate(`/video-player/${course._id}`);
                                                 }}
                                                 style={{
                                                     position: "relative",
@@ -587,7 +499,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                 }}
                                             >
                                                 <img
-                                                    src={course?.thumbnail || course?.courseImage || "/course_banner.png"}
+                                                    src={normalizeMediaUrl(course?.thumbnail || course?.courseImage)}
                                                     alt="Course Thumbnail"
                                                     className="thumbnail-img"
                                                     style={{
@@ -653,7 +565,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                                 <source
                                                                     src={currentLesson.videoUrl.startsWith('http')
                                                                         ? currentLesson.videoUrl
-                                                                        : `${import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'https://udemy-latest-backend-1.onrender.com'}${currentLesson.videoUrl.startsWith('/') ? '' : '/'}${currentLesson.videoUrl}`}
+                                                                        : `${config.API_BASE_URL.replace('/api', '')}/${currentLesson.videoUrl.replace(/\\/g, '/')}`.replace(/\/+/g, '/').replace(':/', '://')}
                                                                     type="video/mp4"
                                                                 />
                                                             </video>
@@ -672,7 +584,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                             <div className="d-flex justify-content-between align-items-center">
 
                                                 <h5 className="mb-0">
-                                                    {course?.title || "Course Title"}
+                                                    {getLangText(course?.title, userLanguage) || "Course Title"}
                                                 </h5>
 
                                                 <button
@@ -743,6 +655,19 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                     Review
                                                 </a>
                                             </li>
+
+                                            <li className="nav-item" role="presentation">
+                                                <a
+                                                    className="nav-link nw-nav-link"
+                                                    id="faq-tab"
+                                                    data-bs-toggle="tab"
+                                                    href="#faq-section"
+                                                    role="tab"
+                                                    onClick={() => setIsReview(false)}
+                                                >
+                                                    FAQ
+                                                </a>
+                                            </li>
                                         </ul>
 
                                         {/* Tab Content */}
@@ -756,36 +681,42 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                 >
                                                     <div className="udemy-description">
                                                         <h6 className="first_para">Descriptions</h6>
-                                                        <p>
-                                                            {course?.description || 'No description provided.'}
+                                                        <p className="course-desc" style={{ whiteSpace: 'pre-line' }}>
+                                                            {getLangText(course?.description, userLanguage) || 'No description provided.'}
                                                         </p>
                                                     </div>
 
-                                                    {course?.whatYouWillLearn?.length > 0 && (
-                                                        <div className="udemy-description">
-                                                            <h6 className="first_para">What I Will Learn</h6>
-                                                            <ul className="ud-description-list">
-                                                                {course.whatYouWillLearn.map((item, index) => (
-                                                                    <li key={index} className="ud-item pb-2">
-                                                                        {item}
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    )}
+                                                    {course?.whatYouWillLearn && (() => {
+                                                        const learnList = Array.isArray(course.whatYouWillLearn)
+                                                            ? course.whatYouWillLearn
+                                                            : (course.whatYouWillLearn[userLanguage === 'Kannada' ? 'kn' : 'en'] || course.whatYouWillLearn.en || []);
+                                                        return learnList.length > 0 && (
+                                                            <div className="udemy-description">
+                                                                <h6 className="first_para">What I Will Learn</h6>
+                                                                <ul className="ud-description-list">
+                                                                    {learnList.map((item, index) => (
+                                                                        <li key={index} className="ud-item pb-2">{item}</li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        );
+                                                    })()}
 
-                                                    {course?.requirements?.length > 0 && (
-                                                        <div className="udemy-description">
-                                                            <h6 className="first_para">Requirements</h6>
-                                                            <ul className="ud-description-list">
-                                                                {course.requirements.map((item, index) => (
-                                                                    <li key={index} className="ud-item pb-2">
-                                                                        {item}
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    )}
+                                                    {course?.requirements && (() => {
+                                                        const reqList = Array.isArray(course.requirements)
+                                                            ? course.requirements
+                                                            : (course.requirements[userLanguage === 'Kannada' ? 'kn' : 'en'] || course.requirements.en || []);
+                                                        return reqList.length > 0 && (
+                                                            <div className="udemy-description">
+                                                                <h6 className="first_para">Requirements</h6>
+                                                                <ul className="ud-description-list">
+                                                                    {reqList.map((item, index) => (
+                                                                        <li key={index} className="ud-item pb-2">{item}</li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        );
+                                                    })()}
 
                                                     <div className="payment-tp-border"></div>
 
@@ -817,7 +748,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                                 </span>
                                                                 <div className="bid-about-content">
                                                                     <p>Language</p>
-                                                                    <h6>{course?.language || 'English'}</h6>
+                                                                    <h6>{getLangText(course?.language, userLanguage) || 'English'}</h6>
                                                                 </div>
                                                             </div>
                                                             <div className="bid-grid-box">
@@ -932,8 +863,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                                                             }
 
                                                                                             if (lesson.videoUrl) {
-                                                                                                setCurrentLesson(lesson);
-                                                                                                setShowVideo(true);
+                                                                                                handleLessonClick(lesson);
                                                                                             }
                                                                                         }} className="quiz-title">
                                                                                             {isPurchased && isLearnMode ? (
@@ -941,7 +871,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                                                             ) : (
                                                                                                 <FontAwesomeIcon icon={faLock} className="file-icon" />
                                                                                             )}
-                                                                                            <span>{globalIndex + 1}. {lesson.title}</span>
+                                                                                            <span>{globalIndex + 1}. {getLangText(lesson.title, userLanguage)}</span>
                                                                                         </a>
                                                                                     </div>
 
@@ -994,7 +924,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                                                                         }}
                                                                                                     >
                                                                                                         <MdQuiz className="file-icon me-2" />
-                                                                                                        Quiz {quizIndex + 1} : {quiz.title || "Quiz"}
+                                                                                                        Quiz {quizIndex + 1} : {getLangText(quiz.title, userLanguage) || "Quiz"}
                                                                                                     </a>
                                                                                                 </div>
 
@@ -1071,17 +1001,17 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                                                     >
                                                                                         <div className="accordion-title w-100 d-flex justify-content-between align-items-center pe-5">
                                                                                             <span>
-                                                                                                <b>{sectionIndex + 1}. {section.title || `Section ${sectionIndex + 1}`}</b>
-                                                                                                {!isPurchased && (
-                                                                                                    <a href="#" className="preview-btn ms-2">
-                                                                                                        <FontAwesomeIcon icon={faLock} />
-                                                                                                    </a>
-                                                                                                )}
+                                                                                                <b>{sectionIndex + 1}. {getLangText(section.title, userLanguage) || `Section ${sectionIndex + 1}`}</b>
+                                                                                             {!isPurchased && (
+                                                                                                 <a href="#" className="preview-btn ms-2">
+                                                                                                     <FontAwesomeIcon icon={faLock} />
+                                                                                                 </a>
+                                                                                             )}
                                                                                             </span>
                                                                                         </div>
                                                                                     </button>
                                                                                     {/* Download button moved OUTSIDE the accordion-button to fix click bubbling */}
-                                                                                    <div className="download-notes-box position-absolute" style={{ right: '60px', top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}>
+                                                                                    <div className="download-notes-box " >
                                                                                         <button
                                                                                             className="udemy-down-btn"
                                                                                             onClick={(e) => {
@@ -1091,7 +1021,8 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                                                                 console.log("Download clicked");
                                                                                             }}
                                                                                         >
-                                                                                            Download Notes
+                                                                                            <span className="mb-note-rm">Download Notes</span>
+                                                                                            <span className="d-lg-none"><FontAwesomeIcon icon={faDownload}/></span>
                                                                                         </button>
                                                                                     </div>
                                                                                 </h2>
@@ -1128,19 +1059,17 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                                                                                     }
 
                                                                                                                     if (lesson.videoUrl) {
-                                                                                                                        setCurrentLesson(lesson);
-                                                                                                                        setShowVideo(true);
+                                                                                                                        handleLessonClick(lesson);
                                                                                                                     }
                                                                                                                 }}
                                                                                                                 className="quiz-title"
                                                                                                             >
-
                                                                                                                 {isPurchased && isLearnMode ? (
                                                                                                                     <FontAwesomeIcon icon={faVideo} className="file-icon" />
                                                                                                                 ) : (
                                                                                                                     <FontAwesomeIcon icon={faLock} className="file-icon" />
                                                                                                                 )}
-                                                                                                                <span>{lesson.title}</span>
+                                                                                                                <span>{getLangText(lesson.title, userLanguage)}</span>
 
                                                                                                             </a>
                                                                                                         </div>
@@ -1196,7 +1125,7 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                                                                                             }}
                                                                                                                         >
                                                                                                                             <MdQuiz className="file-icon me-2" />
-                                                                                                                            Quiz {quizIndex + 1} : {quiz.title || "Quiz"}
+                                                                                                                            Quiz {quizIndex + 1} : {getLangText(quiz.question, userLanguage) || "Quiz"}
                                                                                                                         </a>
                                                                                                                     </div>
 
@@ -1242,14 +1171,70 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                     role="tabpanel"
                                                 >
                                                     <div className="col-lg-12">
+                                                        <div className="d-flex align-items-center justify-content-between mb-3 mt-2">
+                                                            <div>
+                                                                <h3 className="first_para mb-0">Review</h3>
+                                                            </div>
+                                                            <div className="">
+                                                                <div className="dropdown">
+                                                                    <a
+                                                                        href="#"
+                                                                        onClick={(e) => e.preventDefault()}
+                                                                        className="sort-btn"
+                                                                        id="acticonMenu2"
+                                                                        data-bs-toggle="dropdown"
+                                                                        aria-expanded="false"
+                                                                    >
+                                                                        Sort By: {sortReviewBy === 'newest' ? 'Newest' : sortReviewBy === 'oldest' ? 'Oldest' : sortReviewBy === 'highest' ? 'Highest Rating' : 'Lowest Rating'} <MdSort />
+                                                                    </a>
+                                                                    <ul
+                                                                        className="dropdown-menu dropdown-menu-end tble-action-menu admin-dropdown-card"
+                                                                        aria-labelledby="acticonMenu2"
+                                                                    >
+                                                                        <li className="prescription-item">
+                                                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSortReviewBy('newest'); }}>
+                                                                                Newest
+                                                                            </a>
+                                                                        </li>
+                                                                        <li className="prescription-item">
+                                                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSortReviewBy('oldest'); }}>
+                                                                                Oldest
+                                                                            </a>
+                                                                        </li>
+                                                                        <li className="prescription-item">
+                                                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSortReviewBy('highest'); }}>
+                                                                                Highest Rating
+                                                                            </a>
+                                                                        </li>
+                                                                        <li className="prescription-item">
+                                                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSortReviewBy('lowest'); }}>
+                                                                                Lowest Rating
+                                                                            </a>
+                                                                        </li>
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+                                                        </div>
 
                                                         {reviewsLoading ? (
                                                             <p>Loading reviews...</p>
                                                         ) : reviews.length === 0 ? (
                                                             <p className="text-muted">No reviews yet.</p>
                                                         ) : (
-                                                            reviews.map((review, index) => {
-                                                                const reviewer = review.userId;
+                                                            (() => {
+                                                                let sortedReviews = [...reviews];
+                                                                if (sortReviewBy === 'newest') {
+                                                                    sortedReviews.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                                                                } else if (sortReviewBy === 'oldest') {
+                                                                    sortedReviews.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+                                                                } else if (sortReviewBy === 'highest') {
+                                                                    sortedReviews.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+                                                                } else if (sortReviewBy === 'lowest') {
+                                                                    sortedReviews.sort((a, b) => (a.rating || 0) - (b.rating || 0));
+                                                                }
+                                                                
+                                                                return sortedReviews.map((review, index) => {
+                                                                    const reviewer = review.userId;
                                                                 const firstName = reviewer?.profile?.firstName || "";
                                                                 const lastName = reviewer?.profile?.lastName || "";
                                                                 const displayName = (firstName + " " + lastName).trim() || reviewer?.username || "Anonymous";
@@ -1298,9 +1283,66 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                                                                         </div>
                                                                     </div>
                                                                 );
-                                                            })
+                                                            });
+                                                        })()
                                                         )}
 
+                                                    </div>
+                                                </div>
+
+                                                {/* Course FAQ Tab Pane */}
+                                                <div
+                                                    className="tab-pane fade"
+                                                    id="faq-section"
+                                                    role="tabpanel"
+                                                >
+                                                    <div className="col-lg-12 mb-3">
+                                                        <div className="d-flex align-items-center justify-content-between mb-3">
+                                                            <h3 className="first_para mb-0">Course FAQs</h3>
+                                                        </div>
+
+                                                        <div className="payment-tp-border">
+                                                            {faqLoading ? (
+                                                                <div className="text-center py-4">
+                                                                    <div className="spinner-border text-primary" role="status">
+                                                                        <span className="visually-hidden">Loading...</span>
+                                                                    </div>
+                                                                </div>
+                                                            ) : courseFAQs.length === 0 ? (
+                                                                <p className="text-center py-4">No FAQs available for this course yet.</p>
+                                                            ) : (
+                                                                <div className="accordion udemy-faq-accordion" id="courseFaqAccordion">
+                                                                    {courseFAQs.map((faq, index) => (
+                                                                        <div className="accordion-item border-0 mb-3 shadow-sm rounded overflow-hidden" key={faq._id}>
+                                                                            <h2 className="accordion-header" id={`faqHeadingSecond${index}`}>
+                                                                                <button 
+                                                                                    className={`accordion-button ${activeFaq === index ? '' : 'collapsed'} fw-bold py-3 px-4 bg-white text-dark`} 
+                                                                                    type="button" 
+                                                                                    onClick={() => setActiveFaq(activeFaq === index ? null : index)}
+                                                                                    style={{ boxShadow: 'none' }}
+                                                                                >
+                                                                                    <span className="me-3 text-primary">Q.</span> {faq.question}
+                                                                                </button>
+                                                                            </h2>
+                                                                            <div 
+                                                                                id={`faqCollapseSecond${index}`} 
+                                                                                className={`accordion-collapse collapse ${activeFaq === index ? 'show' : ''}`} 
+                                                                                aria-labelledby={`faqHeadingSecond${index}`}
+                                                                            >
+                                                                                <div className="accordion-body py-3 px-4 bg-light-subtle border-top">
+                                                                                    <div className="d-flex">
+                                                                                        <span className="me-3 text-success fw-bold">A.</span>
+                                                                                        <div className="text-muted" style={{ whiteSpace: 'pre-line' }}>
+                                                                                            {faq.answer}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1314,142 +1356,75 @@ function CourseDetailsContentSecond({ course: propCourse }) {
                         <div className="col-lg-4">
                             <div className="course-card mb-3">
                                 <div className="udemy-price-box mb-3">
-                                    {isLearnMode && isEnrolled ? (
-                                        <h5 className="fz-20 mb-0">Your Learning Progress</h5>
-                                    ) : (
-                                        <h4 className="course-price">
-                                            ${course?.discountedPrice || course?.price || "24.92"}
-                                        </h4>
-                                    )}
+                                    <h4 className="course-price">
+                                        ${course?.discountedPrice || course?.price || "24.92"}
+                                    </h4>
                                 </div>
 
-                                {isLearnMode && isEnrolled ? (
-                                    <>
-                                        <div className="progress-wrapper mb-3">
-                                            <div className="progress-item">
-                                                <div className="d-flex align-items-center justify-content-between udemy-progress">
-                                                    <span className="udemy-complete-video">Course Completion</span>
-                                                </div>
+                                <div className="purchase-box">
+                                    <button
+                                        className="thm-btn w-100 btn-lg btn-success fw-bold py-3 px-5"
+                                        onClick={() => {
+                                            if (!isLoggedIn) {
+                                                openLoginModal();
+                                                return;
+                                            }
+                                            navigate(`/buy/${course._id}`);
+                                        }}
+                                    >
+                                        Buy Now
+                                    </button>
 
-                                                <div className="progress custom-progress">
-                                                    <div className="progress-bar" style={{ width: "40%" }}></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        {isCheckingPurchase ? (
-                                            <div className="purchase-box">
-                                                <button className="thm-btn" disabled>
-                                                    Checking Purchase Status...
-                                                </button>
-                                            </div>
-                                        ) : isPurchased ? (
-                                            <>
-                                                <div className="purchase-box">
-                                                    <button
-                                                        className="thm-btn w-100"
-                                                        onClick={() => navigate(`/course/${course._id}/learn`, { state: { course } })}
-                                                    >
-                                                        Start Learning
-                                                    </button>
-                                                </div>
+                                    <div className="d-flex align-items gap-3 mt-3">
+                                        <button
+                                            className="thm-btn w-100 outline"
+                                            onClick={() => {
+                                                if (!isLoggedIn) {
+                                                    openLoginModal();
+                                                    return;
+                                                }
+                                                addToCart();
+                                            }}
+                                        >
+                                            Add to Cart
+                                        </button>
 
-                                                {/* Start Learning Progress Section */}
-                                                <div className="progress-wrapper mt-3">
-                                                    <div className="progress-item">
-                                                        <div className="d-flex align-items-center justify-content-between udemy-progress">
-                                                            <span className="udemy-complete-video">
-                                                                Course Completion
-                                                            </span>
-                                                        </div>
-                                                        <div className="progress custom-progress">
-                                                            <div className="progress-bar" style={{ width: "5%" }}></div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <div className="purchase-box">
-                                                    <button
-                                                        className="thm-btn w-100 btn-lg btn-success fw-bold py-3 px-5"
-                                                        onClick={() => {
-                                                            if (!isLoggedIn) {
-                                                                openLoginModal();
-                                                                return;
-                                                            }
-                                                            navigate(`/buy/${course._id}`);
-                                                        }}
-                                                    >
-                                                        Buy Now
-                                                    </button>
+                                        <button
+                                            className="thm-btn w-100 outline"
+                                            onClick={() => {
+                                                if (!isLoggedIn) {
+                                                    openLoginModal();
+                                                    return;
+                                                }
+                                                addToWishlist();
+                                            }}
+                                            disabled={wishlistLoading}
+                                        >
+                                            {wishlistLoading ? "Adding..." : "Add to Wishlist"}
+                                        </button>
+                                    </div>
+                                </div>
 
-                                                    <div className="d-flex align-items gap-3 mt-3">
-                                                        <button
-                                                            className="thm-btn w-100 outline"
-                                                            onClick={() => {
-                                                                if (!isLoggedIn) {
-                                                                    openLoginModal();
-                                                                    return;
-                                                                }
-                                                                addToCart();
-                                                            }}
-                                                        >
-                                                            Add to Cart
-                                                        </button>
-
-                                                        <button
-                                                            className="thm-btn w-100 outline"
-                                                            onClick={() => {
-                                                                if (!isLoggedIn) {
-                                                                    openLoginModal();
-                                                                    return;
-                                                                }
-                                                                addToWishlist();
-                                                            }}
-                                                            disabled={wishlistLoading}
-                                                        >
-                                                            {wishlistLoading ? "Adding..." : "Add to Wishlist"}
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* summary icons shown only when not purchased */}
-                                                <div className="udemy-all-box">
-                                                    <ul className="udemy-all-list">
-
-                                                        <li className="udemy-course-item">
-                                                            <span><PiCardsThreeFill className="udemy-list-icon" /></span>
-                                                            {course?.sections?.length || 0} Section
-                                                        </li>
-
-                                                        <li className="udemy-course-item">
-                                                            <span><MdDesktopWindows className="udemy-list-icon" /></span>
-                                                            {getTotalLessons()} Lecture
-                                                        </li>
-
-                                                        <li className="udemy-course-item">
-                                                            <span><IoMdVideocam className="udemy-list-icon" /></span>
-                                                            {getTotalDuration()} Video length
-                                                        </li>
-
-                                                        <li className="udemy-course-item">
-                                                            <span><IoLanguage className="udemy-list-icon" /></span>
-                                                            {course?.language || "English"}
-                                                        </li>
-
-                                                    </ul>
-                                                </div>
-
-
-                                            </>
-                                        )}
-
-                                    </>
-                                )}
-
+                                <div className="udemy-all-box mt-4">
+                                    <ul className="udemy-all-list">
+                                        <li className="udemy-course-item">
+                                            <span><PiCardsThreeFill className="udemy-list-icon" /></span>
+                                            {course?.sections?.length || 0} Section
+                                        </li>
+                                        <li className="udemy-course-item">
+                                            <span><MdDesktopWindows className="udemy-list-icon" /></span>
+                                            {getTotalLessons()} Lecture
+                                        </li>
+                                        <li className="udemy-course-item">
+                                            <span><IoMdVideocam className="udemy-list-icon" /></span>
+                                            {getTotalDuration()} Video length
+                                        </li>
+                                        <li className="udemy-course-item">
+                                            <span><IoLanguage className="udemy-list-icon" /></span>
+                                            {course?.language || "English"}
+                                        </li>
+                                    </ul>
+                                </div>
                             </div>
                             <div className="course-master-card">
                                 <div className="webinar-content">

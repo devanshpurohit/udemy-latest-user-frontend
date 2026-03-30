@@ -3,7 +3,9 @@ import { useEffect } from "react";
 import Footer from "./Footer"
 import Header from "./Header";
 import HeaderSecond from "./HeaderSecond";
+import SocketListener from "./SocketListener";
 import { useAuth } from '../../contexts/AuthContext';
+import ChatWidget from "./ChatWidget";
 
 function AppLayout() {
     const { isAuthenticated } = useAuth();
@@ -22,6 +24,7 @@ function AppLayout() {
     return (
         <>
             <div className="app-layout">
+                {isAuthenticated && <SocketListener />}
                 {!staticRoute.includes(path) &&
                     (isAuthenticated ? <HeaderSecond /> : <Header />)
                    
@@ -30,6 +33,7 @@ function AppLayout() {
                     <Outlet />
                 </div>
                 {!staticRoute.includes(path) && <Footer />}
+                <ChatWidget />
             </div>
 
 

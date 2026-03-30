@@ -75,8 +75,8 @@ const Register = () => {
                     console.log('🔍 Redirecting admin to dashboard...');
                     navigate('/admin/dashboard');
                 } else {
-                    console.log('🔍 Redirecting user to dashboard...');
-                    navigate('/my-dashboard');
+                    console.log('🔍 Redirecting user to home...');
+                    navigate('/');
                 }
             } else {
                 setError(result.error);

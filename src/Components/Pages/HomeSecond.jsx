@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUser, faStar, faStarHalf } from '@fortawesome/free-solid-svg-icons';
 import { BiSolidBadgeCheck } from 'react-icons/bi';
@@ -7,6 +9,7 @@ import { FaArrowLeft, FaArrowRight, FaCheck, FaQuoteRight } from 'react-icons/fa
 import { MdChevronLeft, MdChevronRight } from 'react-icons/md';
 import { getBackendUrl } from '../../config/backendConfig';
 import config from '../../config/config';
+import { getLangText } from '../../utils/languageUtils';
 import { Splide, SplideSlide } from "@splidejs/react-splide";
 import "@splidejs/react-splide/css";
 import "@splidejs/react-splide/css/core";
@@ -16,12 +19,42 @@ import TopLearningSlider from '../Sliders/TopLearningSlider';
 import UpcomingSlider from '../Sliders/UpcomingSlider';
 import FeedbackSlider from '../Sliders/FeedbackSlider';
 import CourseCard from '../Common/CourseCard';
+import { getQuestionsPublic, getAllCourses, getCachedAllCourses, getCachedQuestionsPublic, getMyCourses } from "../../services/apiService";
 
 const HomeSecond = () => {
+    const { isAuthenticated, user } = useAuth();
+    const userLanguage = user?.profile?.language || 'English';
+    const { settings } = useSettings();
+    const navigate = useNavigate();
+    const [faqs, setFaqs] = useState([]);
+    const [loadingFaqs, setLoadingFaqs] = useState(true);
+
+    useEffect(() => {
+        // Instant FAQ cache load
+        const cachedFaqs = getCachedQuestionsPublic();
+        if (cachedFaqs && cachedFaqs.data) {
+            setFaqs(cachedFaqs.data);
+            setLoadingFaqs(false);
+        }
+
+        const fetchFaqs = async () => {
+            try {
+                const res = await getQuestionsPublic(false);
+                if (res.success) {
+                    setFaqs(res.data);
+                }
+            } catch (err) {
+                console.error("Failed to fetch FAQs:", err);
+            } finally {
+                setLoadingFaqs(false);
+            }
+        };
+        fetchFaqs();
+    }, []);
+
     const [courses, setCourses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [currentPage, setCurrentPage] = useState(0);
     const coursesPerPage = 4;
 
     const splideRef1 = useRef(null);
@@ -30,30 +63,20 @@ const HomeSecond = () => {
 
     // Memoize course slices to prevent unnecessary recalculations
     const topLearningCourses = useMemo(() => courses, [courses]);
-    const continueLearningCourses = useMemo(() => courses, [courses]);
     const upcomingCourses = useMemo(() => courses.slice(0, 4), [courses]);
 
-    // Pagination logic for Continue Learning section
-    const totalPages = Math.ceil(continueLearningCourses.length / coursesPerPage);
-    const startIndex = currentPage * coursesPerPage;
-    const endIndex = startIndex + coursesPerPage;
-    const currentCourses = continueLearningCourses.slice(startIndex, endIndex);
 
-    const handleNextPage = () => {
-        if (currentPage < totalPages - 1) {
-            setCurrentPage(currentPage + 1);
-        }
-    };
-
-    const handlePrevPage = () => {
-        if (currentPage > 0) {
-            setCurrentPage(currentPage - 1);
-        }
-    };
 
     useEffect(() => {
+        // Instant Course cache load
+        const cachedCourses = getCachedAllCourses();
+        if (cachedCourses && cachedCourses.data) {
+            setCourses(cachedCourses.data);
+            setLoading(false);
+        }
+        
         fetchCourses();
-    }, []);
+    }, [isAuthenticated]);
     useEffect(() => {
         if (courses.length > 0) {
             splideRef1.current?.splide?.refresh();
@@ -64,51 +87,66 @@ const HomeSecond = () => {
 
     const fetchCourses = async () => {
         try {
-            setLoading(true);
-            console.log('🔍 HomeSecond: Fetching courses from API...');
-
-            // Get token for purchase status checking
-            const token = localStorage.getItem('token');
-            const headers = {
-                'Content-Type': 'application/json'
-            };
-
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
+            if (courses.length === 0) {
+                setLoading(true);
             }
+            console.log('🔍 HomeSecond: Fetching courses via apiService...');
 
-            // Use backend URL from config
-            const response = await fetch(`${config.API_BASE_URL}/public/courses`, {
-                headers: headers
-            });
-            console.log('🔍 HomeSecond: Response status:', response.status);
-            console.log('🔍 HomeSecond: Response ok:', response.ok);
+            const response = await getAllCourses(false);
+            
+            if (response.success && response.data && Array.isArray(response.data)) {
+                let coursesData = response.data;
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+                // If authenticated, fetch progress data and merge it
+                if (isAuthenticated) {
+                    try {
+                        const myCoursesRes = await getMyCourses(false); // Bypass cache for live update
+                        if (myCoursesRes.success && myCoursesRes.data) {
+                            const responseData = myCoursesRes.data;
+                            const myCourses = Array.isArray(responseData) 
+                                ? responseData 
+                                : (responseData.data || responseData.enrolledCourses || responseData.courses || []);
 
-            const data = await response.json();
-            console.log('🔍 HomeSecond: Raw API Response:', data);
-            console.log('🔍 HomeSecond: Success status:', data.success);
-            console.log('🔍 HomeSecond: Data type:', typeof data.data);
-            console.log('🔍 HomeSecond: Data length:', data.data ? data.data.length : 'undefined');
-            console.log('🔍 HomeSecond: Course titles:', data.data ? data.data.map(c => c.title) : 'No data');
+                            // Create a map for quick lookup
+                            const progressMap = new Map();
+                            myCourses.forEach(c => {
+                                // Handle both populated and unpopulated courseId
+                                const courseId = c.courseId?._id || c.courseId?.id || c.courseId || c._id || c.id;
+                                if (courseId) {
+                                    progressMap.set(courseId.toString(), {
+                                        progressPercentage: c.progressPercentage || 0,
+                                        completedLessonsCount: c.completedLessonsCount || 0,
+                                        totalLessonsCount: c.totalLessonsCount || 0,
+                                        isPurchased: true
+                                    });
+                                }
+                            });
 
-            if (data.success && data.data && Array.isArray(data.data)) {
-                setCourses(data.data);
-                console.log(`✅ HomeSecond: ${data.data.length} courses loaded`);
-                console.log('🔍 HomeSecond: Set courses state:', data.data.length);
+                            // Merge progress into the main courses list
+                            coursesData = coursesData.map(course => {
+                                const courseIdStr = (course._id || course.id)?.toString();
+                                if (courseIdStr) {
+                                    const progress = progressMap.get(courseIdStr);
+                                    if (progress) {
+                                        return { ...course, ...progress };
+                                    }
+                                }
+                                return course;
+                            });
+                        }
+                    } catch (myErr) {
+                        console.error("Failed to fetch user progress:", myErr);
+                    }
+                }
+
+                setCourses(coursesData);
+                console.log(`✅ HomeSecond: ${coursesData.length} courses loaded ${response.fromCache ? '(from cache)' : ''}`);
             } else {
-                setError(data.message || 'Failed to load courses - Invalid data format');
-                console.error('❌ HomeSecond: API Error:', data.message);
-                console.error('❌ HomeSecond: Data structure:', JSON.stringify(data, null, 2));
+                setError(response.error || 'Failed to load courses');
             }
         } catch (error) {
             setError('Failed to fetch courses');
             console.error('❌ HomeSecond: Fetch Error:', error);
-            console.error('❌ HomeSecond: Full error details:', error);
-            console.error('❌ HomeSecond: Error stack:', error.stack);
         } finally {
             setLoading(false);
         }
@@ -137,7 +175,25 @@ const HomeSecond = () => {
                         <div className="col-lg-12">
                             <div className='udemy-alert-content'>
                                 <p>For all the students who have the AI card purchased, please click the button to access the Student AI course details.</p>
-                                <button className='alert-btn'>Click here!</button>
+                                <button 
+                                    className='alert-btn'
+                                    {...(!isAuthenticated ? { 'data-bs-toggle': 'modal', 'data-bs-target': '#loginModal' } : {})}
+                                    onClick={() => {
+                                        if (isAuthenticated) {
+                                            const aiCourse = courses.find(c => {
+                                                const title = getLangText(c.title, userLanguage);
+                                                return title.toLowerCase().includes('ai');
+                                            }) || courses[0];
+                                            if (aiCourse) {
+                                                navigate(`/course/${aiCourse._id}`);
+                                            } else {
+                                                navigate('/my-account');
+                                            }
+                                        }
+                                    }}
+                                >
+                                    Click here!
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -149,11 +205,11 @@ const HomeSecond = () => {
                     <div className="row align-items-center">
                         <div className="col-lg-6">
                             <div className='udemy-hp-content'>
-                                <h5>Learn AI the Smart Way</h5>
-                                <h2>Simple, practical AI concepts designed for school students.</h2>
-                                <p>Explore the basics of AI through guided lessons and real examples.Learn how artificial intelligence is shaping the world around us.</p>
+                                <h5>{settings.bannerTitle || "Learn AI the Smart Way"}</h5>
+                                <h2>{settings.bannerSubtitle || "Simple, practical AI concepts designed for school students."}</h2>
+                                <p>{settings.bannerDescription || "Explore the basics of AI through guided lessons and real examples.Learn how artificial intelligence is shaping the world around us."}</p>
                                 <div>
-                                    <NavLink to="/my-course" className='explore-btn'>Explore Courses</NavLink>
+                                    <NavLink to="/available-courses" className='explore-btn'>Explore Courses</NavLink>
                                 </div>
                             </div>
                         </div>
@@ -167,131 +223,7 @@ const HomeSecond = () => {
             </section>
 
 
-            <section className='continue-section'>
-                <div className='container'>
-                    <div className='row'>
-                        <div className='col-lg-12'>
-                            <div className="text-center mb-4">
-                                <div className='udemy-learn-content'>
 
-                                    <h5><span className='top-learn-title'>Continue</span> Learning </h5>
-                                    <div className='udemy-para-content'>
-                                        <p>Most popular courses for students.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-
-
-                        {/* <TopLearningSlider
-                                topLearningCourses={topLearningCourses}
-                                loading={loading}
-                                error={error}
-                                onRetry={fetchCourses}
-                                splideRef={splideRef1}
-                            /> */}
-
-                        {loading ? (
-                            <div className="text-center py-5 w-100 spiner-loader">
-                                <div className="loader-course" role="status">
-                                    <span className=""></span>
-                                </div>
-                                <p className="mt-3">Loading courses...</p>
-                            </div>
-                        ) : error ? (
-                            <div className="text-center py-5">
-                                <div className="alert alert-danger">
-                                    <h4>Error loading courses</h4>
-                                    <p>{error}</p>
-                                    <button className="btn btn-primary" onClick={fetchCourses}>
-                                        Try Again
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (topLearningCourses || []).length === 0 ? (
-                            <div className="text-center py-5">
-                                <h3>No courses available</h3>
-                                <p>Check back later for new courses.</p>
-                            </div>
-                        ) : (
-                            (topLearningCourses || [])?.slice(0, 2).map((course) => (
-                                <div className='col-lg-12 col-md-12 col-sm-12 mb-3'>
-                                    <div key={course._id}>
-                                        <NavLink to={`/course/${course._id}`} className="text-decoration-none">
-                                            <div className="udemy-cards">
-
-                                                <div className='row'>
-                                                    <div className='col-lg-6'>
-                                                        <div className='udemy-picture'>
-                                                            <img
-                                                                src={course.thumbnail || course.courseImage || "/course_01.png"}
-                                                                alt={course.title}
-                                                            />
-
-                                                            <div className="udemy-category-box">
-                                                                <span className="udemy-seller"> Best Seller </span>
-                                                                <span className="udemy-offer"> 20% OFF </span>
-                                                            </div>
-
-                                                        </div>
-
-                                                    </div>
-                                                    <div className='col-lg-6'>
-                                                        <div className="udemy-content top-course-list-box">
-                                                            <div>
-                                                                <h4>{course.title}</h4>
-                                                                <span className="pb-2">
-                                                                    <FontAwesomeIcon icon={faUser} className="udemy-course-icon" /> <a href="#" className="udemy-user">{course.instructor?.username || 'Instructor'}</a>
-
-                                                                </span>
-                                                                <p>{course.description ? course.description.substring(0, 80) + '...' : 'Course description not available'}</p>
-                                                            </div>
-
-                                                            {/* <span >₹{course.price || '999'}</span> */}
-                                                            <div>
-                                                                <ul className="rating-list">
-                                                                    <li className="rating-item"> <a href="#" className="rating-text"><FontAwesomeIcon icon={faStar} /> </a> </li>
-                                                                    <li className="rating-item"> <a href="#" className="rating-text"><FontAwesomeIcon icon={faStar} /> </a> </li>
-                                                                    <li className="rating-item"> <a href="#" className="rating-text"><FontAwesomeIcon icon={faStar} /> </a> </li>
-                                                                    <li className="rating-item"> <a href="#" className="rating-text"><FontAwesomeIcon icon={faStar} /> </a> </li>
-                                                                    <li className="rating-item"> <a href="#" className="rating-text"><FontAwesomeIcon icon={faStarHalf} /> </a> </li>
-                                                                    <li className="rating-item"><span className="rating-number">(1.2K)</span></li>
-                                                                </ul>
-                                                                <div className="progress-wrapper mt-1">
-                                                                    <div className="progress-item">
-                                                                        <div className="d-flex align-items-center justify-content-between udemy-progress">
-                                                                            <span className="udemy-complete-video">(4/10)Video Completed</span>
-                                                                            <span className="progress-label fz-12 fw-500">60%</span>
-                                                                        </div>
-
-                                                                        <div className="progress custom-progress">
-                                                                            <div className="progress-bar" style={{ width: "60%" }}></div>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                    </div>
-
-                                                </div>
-
-
-
-
-
-                                            </div>
-                                        </NavLink>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-
-                </div>
-
-            </section>
 
 
             <section className='top-learn-section'>
@@ -307,140 +239,18 @@ const HomeSecond = () => {
                         </div>
 
                         <div className='col-lg-12 mb-3'>
-                            {currentCourses.map((course) => (
-                                <div key={course._id}>
-
-                                    <NavLink
-                                        to={`/course/${course._id}`}
-                                        className="text-decoration-none"
-                                    >
-
-                                        <div className="udemy-cards mb-3">
-                                            <div className='row '>
-
-                                                <div className='col-lg-6'>
-                                                    <div className="udemy-picture top-udemy-picture">
-                                                        <img
-                                                            src={
-                                                                course.courseImage
-                                                                    ? course.courseImage
-                                                                    : "/course_01.png"
-                                                            }
-                                                            alt={course.title}
-                                                        />
-
-                                                        <div className="udemy-category-box">
-                                                            <span className="udemy-seller">Best Seller</span>
-                                                            <span className="udemy-offer">20% OFF</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className='col-lg-6'>
-                                                    <div className="udemy-content top-udemy-content-box">
-
-                                                        <div className='udemy-course-list top-course-list-box'>
-
-                                                            <div className='udemy-course-top'>
-
-                                                                <h4>{course.title}</h4>
-
-                                                                <span className="pb-2">
-                                                                    <FontAwesomeIcon
-                                                                        icon={faUser}
-                                                                        className="udemy-course-icon"
-                                                                    />
-
-                                                                    <a className="udemy-user">
-                                                                        {course.instructor?.username || "Admin"}
-                                                                    </a>
-                                                                </span>
-
-                                                                <p>
-                                                                    {course.description?.slice(0, 90)}...
-                                                                </p>
-
-                                                            </div>
-
-                                                            <div className='udemy-course-bottom'>
-
-                                                                <div className='udemy-certificate-content'>
-                                                                    <h6>
-
-                                                                        <span className='fz-24'>
-                                                                            <BiSolidBadgeCheck />
-                                                                        </span>
-
-                                                                        Certificate Guarantee
-
-                                                                    </h6>
-                                                                </div>
-
-                                                                <ul className="rating-list">
-
-                                                                    <li className="rating-item">
-                                                                        <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                                                    </li>
-
-                                                                    <li className="rating-item">
-                                                                        <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                                                    </li>
-
-                                                                    <li className="rating-item">
-                                                                        <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                                                    </li>
-
-                                                                    <li className="rating-item">
-                                                                        <FontAwesomeIcon icon={faStar} className='rating-text' />
-                                                                    </li>
-
-                                                                    <li className="rating-item">
-                                                                        <FontAwesomeIcon icon={faStarHalf} className='rating-text' />
-                                                                    </li>
-
-                                                                    <li className="rating-item">
-                                                                        <span className="rating-number">(1.2K)</span>
-                                                                    </li>
-
-                                                                </ul>
-
-                                                                <div className="udemy-course-price">
-
-                                                                    <h5>
-                                                                        ${course.price}
-
-                                                                        {course.originalPrice && (
-                                                                            <del className="udemy-sale">
-                                                                                ${course.originalPrice}
-                                                                            </del>
-                                                                        )}
-
-                                                                    </h5>
-
-                                                                </div>
-
-                                                            </div>
-
-                                                        </div>
-
-                                                    </div>
-                                                </div>
-
-
-
-
-
-
-                                            </div>
-                                        </div>
-
-                                    </NavLink>
-
-                                </div>
-                            ))}
+                            <div className="row">
+                                {(topLearningCourses || [])?.slice(0, 4).map((course) => (
+                                    <div key={course._id} className="col-lg-12 col-md-12 col-sm-12 mb-3">
+                                        <CourseCard course={course} variant="my-course" />
+                                    </div>
+                                ))}
+                            </div>
 
                             <div className='text-center top-more-course mt-4'>
-                                <NavLink to="/my-course" className='nw-thm-btn'>Show More</NavLink>
+                                <NavLink to="/available-courses" className='nw-thm-btn'>Show More</NavLink>
                             </div>
+                        </div>
 
                             {/* {loading ? (
                                             <div className="text-center py-5">
@@ -552,7 +362,7 @@ const HomeSecond = () => {
                                                                                         </li>
             
                                                                                         <li className="rating-item">
-                                                                                            <span className="rating-number">(1.2K)</span>
+                                                                                            <span className="rating-number">({course.averageRating?.toFixed(1) || "0.0"})</span>
                                                                                         </li>
             
                                                                                     </ul>
@@ -624,7 +434,7 @@ const HomeSecond = () => {
                                                 )}
                                             </>
                                         )} */}
-                        </div>
+
 
                         {/* <div className='col-lg-12'>
                             <div className="zs-splide-wrapper">
@@ -758,7 +568,7 @@ const HomeSecond = () => {
                                                                                     </li>
 
                                                                                     <li className="rating-item">
-                                                                                        <span className="rating-number">(1.2K)</span>
+                                                                                        <span className="rating-number">({course.averageRating?.toFixed(1) || "0.0"})</span>
                                                                                     </li>
 
                                                                                 </ul>
@@ -977,7 +787,7 @@ const HomeSecond = () => {
                             />
                         </div>
                         <div className='text-center top-more-course mt-4'>
-                            <NavLink to="/my-course" className='nw-thm-btn'>Show More</NavLink>
+                            <NavLink to="/available-courses" className='nw-thm-btn'>Show More</NavLink>
                         </div>
                     </div>
                 </div>
@@ -1010,93 +820,40 @@ const HomeSecond = () => {
                         </div>
                         <div className='col-lg-12'>
                             <div className='faq-cards'>
-                                <div className="accordion zx-faq-accordion " id="zxFaq">
-                                    <div className="accordion-item">
-                                        <h2 className="accordion-header" id="headingOne">
-                                            <button className="accordion-button  zx-faq-btn"
-                                                type="button"
-                                                data-bs-toggle="collapse"
-                                                data-bs-target="#collapseOne"
-                                                aria-expanded="true">
-                                                Who is this course designed for?
-                                            </button>
-                                        </h2>
-                                        <div id="collapseOne"
-                                            className="accordion-collapse collapse show"
-                                            data-bs-parent="#zxFaq">
-                                            <div className="accordion-body">
-                                                Sign up for a free account, complete your profile, showcase your skills, and start bidding on projects that match your expertise.
+                                <div className="accordion zx-faq-accordion " id="zxFaqHS">
+                                    {loadingFaqs ? (
+                                        <div className="text-center py-4">
+                                            <div className="spinner-border text-primary" role="status">
+                                                <span className="visually-hidden">Loading...</span>
                                             </div>
                                         </div>
-                                    </div>
-                                    <div className="accordion-item">
-                                        <h2 className="accordion-header" id="headingTwo">
-                                            <button className="accordion-button collapsed zx-faq-btn"
-                                                type="button"
-                                                data-bs-toggle="collapse"
-                                                data-bs-target="#collapseTwo">
-                                                What makes this course easy to understand for students?
-                                            </button>
-                                        </h2>
-                                        <div id="collapseTwo"
-                                            className="accordion-collapse collapse"
-                                            data-bs-parent="#zxFaq">
-                                            <div className="accordion-body">
-                                                Sign up for a free account, complete your profile, showcase your skills, and start bidding on projects that match your expertise.
+                                    ) : faqs.length > 0 ? (
+                                        faqs.slice(0, 10).map((faq, index) => (
+                                            <div className="accordion-item" key={faq._id}>
+                                                <h2 className="accordion-header" id={`headingHS${index}`}>
+                                                    <button 
+                                                        className={`accordion-button zx-faq-btn ${index !== 0 ? 'collapsed' : ''}`}
+                                                        type="button"
+                                                        data-bs-toggle="collapse"
+                                                        data-bs-target={`#collapseHS${index}`}
+                                                        aria-expanded={index === 0 ? "true" : "false"}>
+                                                        {faq.question}
+                                                    </button>
+                                                </h2>
+                                                <div id={`collapseHS${index}`}
+                                                    className={`accordion-collapse collapse ${index === 0 ? 'show' : ''}`}
+                                                    data-bs-parent="#zxFaqHS">
+                                                    <div className="accordion-body">
+                                                        {faq.answer || "No answer provided yet."}
+                                                    </div>
+                                                </div>
                                             </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-center py-4 text-muted">
+                                            No questions asked yet. Be the first to ask!
                                         </div>
-                                    </div>
-                                    <div className="accordion-item">
-                                        <h2 className="accordion-header" id="headingThree">
-                                            <button className="accordion-button collapsed zx-faq-btn"
-                                                type="button"
-                                                data-bs-toggle="collapse"
-                                                data-bs-target="#collapseThree">
-                                                What type of knowledge or skills does this course help students develop?
-                                            </button>
-                                        </h2>
-                                        <div id="collapseThree"
-                                            className="accordion-collapse collapse"
-                                            data-bs-parent="#zxFaq">
-                                            <div className="accordion-body">
-                                                Sign up for a free account, complete your profile, showcase your skills, and start bidding on projects that match your expertise.
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="accordion-item">
-                                        <h2 className="accordion-header" id="headingFour">
-                                            <button className="accordion-button collapsed zx-faq-btn"
-                                                type="button"
-                                                data-bs-toggle="collapse"
-                                                data-bs-target="#collapseFour">
-                                                Why is this course useful for students at a school level?
-                                            </button>
-                                        </h2>
-                                        <div id="collapseFour"
-                                            className="accordion-collapse collapse"
-                                            data-bs-parent="#zxFaq">
-                                            <div className="accordion-body">
-                                                Sign up for a free account, complete your profile, showcase your skills, and start bidding on projects that match your expertise.
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="accordion-item">
-                                        <h2 className="accordion-header" id="headingFive">
-                                            <button className="accordion-button collapsed zx-faq-btn"
-                                                type="button"
-                                                data-bs-toggle="collapse"
-                                                data-bs-target="#collapseFive">
-                                                What learning materials are included in this course?
-                                            </button>
-                                        </h2>
-                                        <div id="collapseFive"
-                                            className="accordion-collapse collapse"
-                                            data-bs-parent="#zxFaq">
-                                            <div className="accordion-body">
-                                                Sign up for a free account, complete your profile, showcase your skills, and start bidding on projects that match your expertise.
-                                            </div>
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

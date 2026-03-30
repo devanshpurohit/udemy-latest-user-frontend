@@ -129,7 +129,7 @@
 
 
 .navbar-menu-list{
-  gap: 0;
+  gap: 10px;
 }
 
 .admin-dropdown-card {
@@ -436,6 +436,25 @@ font-size: 24px !important;
   margin-bottom: 5px;
 }
 
+.no-radius-video{
+  height: 300px;
+}
+.video-details-content{
+  padding: 10px;
+}
+
+
+.mobile-side-box .thm-btn{
+  width: 100%;
+}
+
+/* .mobile-responsive-bx h4{
+  display: none;
+}
+
+.mobile-responsive-bx p{
+  display: none;
+} */
 
 
 
@@ -533,6 +552,19 @@ font-size: 24px !important;
 
 .sub-total-box h6{
   font-size: 20px;
+}
+
+.mb-note-rm{
+  display: none;
+}
+
+.udemy-down-btn{
+  padding: 8px;
+}
+
+.download-notes-box{
+  top: 10px;
+  right: 25px;
 }
 
 }

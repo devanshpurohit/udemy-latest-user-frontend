@@ -6,62 +6,57 @@ import React, { useState, useEffect, useMemo } from 'react';
 import CourseCard from '../Common/CourseCard';
 import { NavLink } from 'react-router-dom';
 import config from "../../config/config";
+import { getAllCourses, syncCartWithPurchases, getCachedAllCourses } from "../../services/apiService";
 
 function MyCourses() {
     const [courses, setCourses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [currentPage, setCurrentPage] = useState(1);
     const [selectedRating, setSelectedRating] = useState(null);
     const [selectedLanguage, setSelectedLanguage] = useState(null);
     const [selectedSort, setSelectedSort] = useState('newest');
-    const coursesPerPage = 8;
 
-
-    const handlePageChange = (page) => {
-        setCurrentPage(page);
-        window.scrollTo(0, 500); // Scroll to top of results on page change
-    };
-
-    const fetchMyCourses = async () => {
+    const fetchMyCourses = async (isInitialLoad = false) => {
         try {
-            setLoading(true);
-            console.log('🔍 MyCourses: Fetching all courses from API...');
-
-            // Fetch all courses (no auth needed, public endpoint)
-            const response = await fetch(`${config.API_BASE_URL}/public/courses`);
-            console.log('🔍 MyCourses: Response status:', response.status);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            // Only show loading if we don't have courses already (optimistic UI)
+            if (courses.length === 0) {
+                setLoading(true);
             }
             
-            const data = await response.json();
-            console.log('🔍 MyCourses: API Response:', data);
-            console.log('🔍 MyCourses: Response data type:', typeof data);
-            console.log('🔍 MyCourses: Response data.data:', data.data);
-            console.log('🔍 MyCourses: Response data.data type:', typeof data.data);
-            console.log('🔍 MyCourses: Is data.data array?:', Array.isArray(data.data));
+            console.log('🔍 MyCourses: Fetching fresh courses (cache bypassed)...');
+            const response = await getAllCourses(false); // Force fresh data
             
-            if (data.success && Array.isArray(data.data)) {
-                setCourses(data.data);
-                console.log(`✅ MyCourses: ${data.data.length} courses loaded`);
+            if (response.success && Array.isArray(response.data)) {
+                setCourses(response.data);
+                console.log(`✅ MyCourses: ${response.data.length} courses loaded ${response.fromCache ? '(from cache)' : ''}`);
             } else {
-                setError(data.message || 'Failed to load courses');
-                console.error('❌ MyCourses: API Error:', data.message);
-                setCourses([]); // Ensure courses is always an array
+                setError(response.error || 'Failed to load courses');
+                setCourses([]);
             }
         } catch (error) {
             setError('Failed to fetch courses');
             console.error('❌ MyCourses: Fetch Error:', error);
-            setCourses([]); // Ensure courses is always an array
+            setCourses([]);
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchMyCourses();
+        // Try to load from cache immediately to eliminate UI flicker
+        const cached = getCachedAllCourses();
+        if (cached && cached.data) {
+            setCourses(cached.data);
+            setLoading(false); // We have data, don't show initial loader
+        }
+
+        fetchMyCourses(true);
+        
+        // Only sync cart occasionally or on first load to save API calls
+        if (!sessionStorage.getItem('cart_synced')) {
+            syncCartWithPurchases();
+            sessionStorage.setItem('cart_synced', 'true');
+        }
     }, []);
 
     const filteredAndSortedCourses = useMemo(() => {
@@ -85,6 +80,8 @@ function MyCourses() {
                 return new Date(b.createdAt) - new Date(a.createdAt);
             } else if (selectedSort === 'oldest') {
                 return new Date(a.createdAt) - new Date(b.createdAt);
+            } else if (selectedSort === 'highest-rated') {
+                return (b.averageRating || 0) - (a.averageRating || 0);
             }
             return 0;
         });
@@ -92,16 +89,6 @@ function MyCourses() {
         return result;
     }, [courses, selectedRating, selectedLanguage, selectedSort]);
 
-    // Pagination logic
-    const totalPages = Math.ceil(filteredAndSortedCourses.length / coursesPerPage);
-    const startIndex = (currentPage - 1) * coursesPerPage;
-    const endIndex = startIndex + coursesPerPage;
-    const currentCourses = filteredAndSortedCourses.slice(startIndex, endIndex);
-
-    // Reset page when filters change
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [selectedRating, selectedLanguage, selectedSort]);
     
     // Helper to get dropdown labels
     const getRatingLabel = () => {
@@ -119,6 +106,7 @@ function MyCourses() {
             case 'popular': return 'Popular';
             case 'newest': return 'Newest';
             case 'oldest': return 'Oldest';
+            case 'highest-rated': return 'Highest Rated';
             default: return 'Sort By';
         }
     };
@@ -132,21 +120,21 @@ function MyCourses() {
                         <div className="col-lg-12">
                             <div className="d-flex align-items-center justify-content-center">
                                 <div>
-                                    <h3 className="lg_title text-center mb-2">My Course</h3>
+                                    <h3 className="lg_title text-center mb-2">Available Courses</h3>
                                     <div className="admin-breadcrumb">
                                         <nav aria-label="breadcrumb">
                                             <ol className="breadcrumb custom-breadcrumb">
                                                 <li className="breadcrumb-item">
-                                                    <a href="/home-second" className="breadcrumb-link">
+                                                    <NavLink to="/" className="breadcrumb-link">
                                                         Home
-                                                    </a>
+                                                    </NavLink>
                                                 </li>
 
                                                 <li
                                                     className="breadcrumb-item active"
                                                     aria-current="page"
                                                 >
-                                                    My Course
+                                                    Available Courses
                                                 </li>
                                             </ol>
                                         </nav>
@@ -164,7 +152,7 @@ function MyCourses() {
                     <div className="row">
                         <div className="udemy-tp-content">
                             <div>
-                                <h3 className="nw-lg-title  mb-lg-0 mb-sm-2">My Courses</h3>
+                                <h3 className="nw-lg-title  mb-lg-0 mb-sm-2">Available Courses</h3>
                             </div>
 
                             <div className="udemy-dropdown-box gap-3">
@@ -193,14 +181,67 @@ function MyCourses() {
                                                 English
                                             </a>
                                         </li>
+                                       
+                                    </ul>
+                                </div>
+
+                                <div className="dropdown">
+                                    <button
+                                        type="button"
+                                        className="vertical-btn dropdown-toggle w-100 text-start"
+                                        id="ratingDropdown"
+                                        data-bs-toggle="dropdown"
+                                        aria-expanded="false"
+                                    >
+                                        {getRatingLabel()}
+                                    </button>
+                                    <ul
+                                        className="dropdown-menu dropdown-menu-end tble-action-menu admin-dropdown-card"
+                                        aria-labelledby="ratingDropdown"
+                                    >
                                         <li className="prescription-item">
-                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedLanguage('Tamil'); }}>
-                                                Tamil
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedRating(null); }}>
+                                                All Rated
                                             </a>
                                         </li>
                                         <li className="prescription-item">
-                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedLanguage('Hindi'); }}>
-                                                Hindi
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedRating(4.5); }}>
+                                                4.5 & Up
+                                            </a>
+                                        </li>
+                                        <li className="prescription-item">
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedRating(4.0); }}>
+                                                4.0 & Up
+                                            </a>
+                                        </li>
+                                        <li className="prescription-item">
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedRating(3.5); }}>
+                                                3.5 & Up
+                                            </a>
+                                        </li>
+                                        <li className="prescription-item">
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedRating(3.0); }}>
+                                                3.0 & Up
+                                            </a>
+                                        </li>
+                                        <li className="prescription-item">
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedRating(2.5); }}>
+                                                2.5 & Up
+                                            </a>
+                                        </li>
+                                        <li className="prescription-item">
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedRating(2.0); }}>
+                                                2.0 & Up
+                                            </a>
+                                        </li>
+                                        <li className="prescription-item">
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedRating(1.5); }}>
+                                                1.5 & Up
+                                            </a>
+                                        </li>
+                                        <li className="prescription-item">
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedRating(1.0); }}>
+                                                1.0 & Up
                                             </a>
                                         </li>
                                     </ul>
@@ -226,6 +267,11 @@ function MyCourses() {
                                             </a>
                                         </li>
                                         <li className="prescription-item">
+                                            <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedSort('highest-rated'); }}>
+                                                Highest Rated
+                                            </a>
+                                        </li>
+                                        <li className="prescription-item">
                                             <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSelectedSort('newest'); }}>
                                                 Newest
                                             </a>
@@ -242,7 +288,7 @@ function MyCourses() {
                     </div>
 
                     <div className="row">
-                        {loading ? (
+                        {loading && courses.length === 0 ? (
                             <div className="text-center py-5 w-100 spiner-loader">
                                             <div className="loader-course" role="status">
                                                 <span className=""></span>
@@ -259,13 +305,8 @@ function MyCourses() {
                                     </button>
                                 </div>
                             </div>
-                        ) : currentCourses.length === 0 ? (
-                            <div className="col-12 text-center py-5">
-                                <h4>No courses available</h4>
-                                <p>Check back later for new courses.</p>
-                            </div>
                         ) : (
-                            currentCourses.map((course) => (
+                            filteredAndSortedCourses.map((course) => (
                                 <div key={course._id} className="col-lg-6 col-sm-12 col-md-12 mb-3">
                                     {/* <CourseCard course={course} /> */}
                                     <CourseCard course={course} variant="my-course" />
@@ -274,53 +315,6 @@ function MyCourses() {
                         )}
                     </div>
 
-                    {/* Pagination */}
-                    {courses.length > 0 && (
-                        <div className="row">
-                            <div className="col-lg-12">
-                                <div className="dz-pagination-wrapper">
-                                    <div className="dz-pagination-info">
-                                        <p>Showing {startIndex + 1} to {Math.min(endIndex, courses.length)} of {courses.length} results</p>
-                                    </div>
-
-                                    <nav>
-                                        <ul className="pagination dz-custom-pagination mb-0">
-                                            <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                                                <button 
-                                                    className="page-link dz-page-link" 
-                                                    onClick={() => handlePageChange(currentPage - 1)}
-                                                    disabled={currentPage === 1}
-                                                >
-                                                    <MdChevronLeft />
-                                                </button>
-                                            </li>
-
-                                            {[...Array(totalPages)].map((_, index) => (
-                                                <li key={index} className={`page-item ${currentPage === index + 1 ? 'active' : ''}`}>
-                                                    <button 
-                                                        className="page-link dz-page-link" 
-                                                        onClick={() => handlePageChange(index + 1)}
-                                                    >
-                                                        {index + 1}
-                                                    </button>
-                                                </li>
-                                            ))}
-
-                                            <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                                                <button 
-                                                    className="page-link dz-page-link" 
-                                                    onClick={() => handlePageChange(currentPage + 1)}
-                                                    disabled={currentPage === totalPages}
-                                                >
-                                                    <MdChevronRight />
-                                                </button>
-                                            </li>
-                                        </ul>
-                                    </nav>
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
             </section>
         </>

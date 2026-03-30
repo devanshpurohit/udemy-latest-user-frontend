@@ -2,15 +2,395 @@ import { faChevronLeft, faClose, faLock, faVideo } from "@fortawesome/free-solid
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import videojs from "video.js";
 import "video.js/dist/video-js.css";
-import { useEffect, useRef } from "react";
-import { MdQuiz } from "react-icons/md";
+import React, { useEffect, useRef, useState } from "react";
+import { MdQuiz, MdRateReview } from "react-icons/md";
+import { IoIosStar, IoIosStarOutline } from "react-icons/io";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import config from "../../config/config";
+import { useAuth } from "../../contexts/AuthContext";
+import { toast } from "react-toastify";
+import { getLangText } from "../../utils/languageUtils";
 
+// 🎥 YouTube detection helpers
+const isYouTube = (url, language) => {
+    const videoUrl = typeof url === 'object' ? getLangText(url, language) : url;
+    if (!videoUrl || typeof videoUrl !== 'string') return false;
+    return videoUrl.includes("youtube.com") || videoUrl.includes("youtu.be");
+};
+
+const extractVideoId = (url) => {
+    if (!url) return null;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+};
+
+const getYouTubeEmbed = (url, language) => {
+    const videoUrl = typeof url === 'object' ? getLangText(url, language) : url;
+    const videoId = extractVideoId(videoUrl);
+    return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1` : "";
+};
 
 function VideoPlayer() {
+    const { id: courseId } = useParams();
+    const navigate = useNavigate();
+    const location = useLocation();
+    const { user } = useAuth();
+    const userLanguage = user?.profile?.language || 'English';
     const videoRef = useRef(null);
+    const playerRef = useRef(null);
+    
+    const [course, setCourse] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [currentLesson, setCurrentLesson] = useState(null);
+    const [completedLessons, setCompletedLessons] = useState(new Set());
+    const [progressPercentage, setProgressPercentage] = useState(0);
+
+    // Review Modal States
+    const [rating, setRating] = useState(5);
+    const [reviewText, setReviewText] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Fetch course data
     useEffect(() => {
-        videojs(videoRef.current);
+        const fetchCourse = async () => {
+            try {
+                setLoading(true);
+                const token = localStorage.getItem('token');
+                const headers = { 'Content-Type': 'application/json' };
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+
+                const response = await fetch(`${config.API_BASE_URL}/public/courses/${courseId}`, { headers });
+                const data = await response.json();
+
+                if (data.success) {
+                    setCourse(data.data);
+                    // Set starting lesson
+                    const allLessons = getAllLessons(data.data);
+                    if (allLessons.length > 0) {
+                        const targetLessonId = location.state?.lessonId;
+                        const startingLesson = targetLessonId 
+                            ? allLessons.find(l => l._id === targetLessonId) 
+                            : allLessons[0];
+                        setCurrentLesson(startingLesson || allLessons[0]);
+                    }
+                    
+                    // Sync progress
+                    let completedIds = new Set();
+                    if (data.data.completedLessons) {
+                        completedIds = new Set(data.data.completedLessons.map(l => 
+                            typeof l === 'object' ? (l.lessonId || l._id || l.lesson) : l
+                        ).filter(Boolean).map(id => id.toString()));
+                    }
+
+                    // Also check localStorage for any pending local progress
+                    if (user?._id) {
+                        const progressKey = `progress_${user._id}_${courseId}`;
+                        const savedProgress = localStorage.getItem(progressKey);
+                        if (savedProgress) {
+                            try {
+                                const localIds = JSON.parse(savedProgress);
+                                localIds.forEach(id => completedIds.add(String(id)));
+                            } catch (e) { console.error("Error parsing local progress:", e); }
+                        }
+                    }
+                    
+                    setCompletedLessons(completedIds);
+                } else {
+                    toast.error(data.message || "Failed to load course");
+                }
+            } catch (error) {
+                console.error("Error fetching course:", error);
+                toast.error("An error occurred while loading the course");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (courseId) fetchCourse();
+    }, [courseId]);
+    
+    // React to lessonId changes from navigation state
+    useEffect(() => {
+        if (course && location.state?.lessonId) {
+            const allLessons = getAllLessons(course);
+            const targetLesson = allLessons.find(l => l._id === location.state.lessonId);
+            if (targetLesson) {
+                setCurrentLesson(targetLesson);
+            }
+        }
+    }, [location.state?.lessonId, course]);
+
+    // Handle Video.js player
+    useEffect(() => {
+        const videoUrl = getLangText(currentLesson?.videoUrl, userLanguage);
+        console.log("🔍 LOCALIZED VIDEO URL:", videoUrl, "For Language:", userLanguage);
+        
+        const isYT = isYouTube(videoUrl, userLanguage);
+
+        // If it's a YouTube video, make sure a video.js player doesn't exist or is disposed
+        if (isYT) {
+            if (playerRef.current) {
+                playerRef.current.dispose();
+                playerRef.current = null;
+            }
+            // YouTube is handled by the iframe rendering in JSX
+        } else if (videoRef.current && currentLesson) {
+            // Initialize or update Video.js
+            if (!playerRef.current) {
+                playerRef.current = videojs(videoRef.current, {
+                    autoplay: true,
+                    muted: true, // Auto-play requires mute
+                    controls: true,
+                    responsive: true,
+                    fluid: true,
+                    preload: 'auto',
+                    userActions: {
+                        hotkeys: true
+                    }
+                });
+
+                playerRef.current.on('ended', () => {
+                    if (currentLesson?._id) {
+                        markLessonCompleted(currentLesson._id);
+                    }
+                });
+
+                playerRef.current.on('error', () => {
+                    const error = playerRef.current.error();
+                    console.error("🎥 Video.js Error:", error);
+                });
+            }
+
+            // Set source
+            if (videoUrl) {
+                let fullUrl = videoUrl;
+                if (!videoUrl.startsWith('http')) {
+                    // Normalize path: replace backslashes, extract only the part after 'uploads' or root
+                    let cleanPath = videoUrl.replace(/\\/g, '/');
+                    
+                    if (cleanPath.includes('/uploads/')) {
+                        cleanPath = '/uploads/' + cleanPath.split('/uploads/').pop();
+                    }
+                    
+                    if (!cleanPath.startsWith('/')) {
+                        cleanPath = '/' + cleanPath;
+                    }
+
+                    const baseUrl = config.API_BASE_URL.replace('/api', '');
+                    fullUrl = `${baseUrl}${cleanPath}`.replace(/\/+/g, '/').replace(':/', '://');
+                    fullUrl = encodeURI(fullUrl);
+                }
+                
+                // Only update source if it changed to prevent AbortError
+                if (playerRef.current.src() !== fullUrl) {
+                    const ext = fullUrl.includes('?') 
+                        ? fullUrl.split('?')[0].split('.').pop().toLowerCase() 
+                        : fullUrl.split('.').pop().toLowerCase();
+                        
+                    let videoType = 'video/mp4'; // Default fallback
+                    if (ext === 'webm') videoType = 'video/webm';
+                    else if (ext === 'ogg' || ext === 'ogv') videoType = 'video/ogg';
+                    else if (ext === 'm3u8') videoType = 'application/x-mpegURL';
+
+                    console.log("🎥 Video Player - Setting source:", fullUrl, "Type:", videoType);
+                    playerRef.current.src({ src: fullUrl, type: videoType }); 
+                    playerRef.current.load();
+                }
+                
+                // Ensure it plays if ready
+                playerRef.current.ready(() => {
+                    const playPromise = playerRef.current.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(error => {
+                            console.log("🎥 Auto-play allowed but play() failed:", error);
+                        });
+                    }
+                });
+            }
+        }
+
+        // YouTube IFrame API logic
+        let ytPlayer;
+        let interval;
+
+        const loadYTPlayer = () => {
+            if (!isYT || !currentLesson) return;
+            
+            ytPlayer = new window.YT.Player("youtube-player-iframe", {
+                events: {
+                    onStateChange: (event) => {
+                        // 100% video complete hone par (State ENDED = 0)
+                        if (event.data === window.YT.PlayerState.ENDED) {
+                            console.log("🎥 YouTube Lesson completed (video ended)");
+                            markLessonCompleted(currentLesson._id);
+                        }
+                    }
+                }
+            });
+        };
+
+        if (isYT && currentLesson) {
+            if (!window.YT) {
+                const tag = document.createElement("script");
+                tag.src = "https://www.youtube.com/iframe_api";
+                document.body.appendChild(tag);
+                window.onYouTubeIframeAPIReady = loadYTPlayer;
+            } else {
+                loadYTPlayer();
+            }
+        }
+
+        return () => {
+            if (interval) clearInterval(interval);
+            // Don't dispose on every lesson change to avoid flickering, 
+            // only when switching to YT (handled above) 
+            // the actual cleanup happens in a separate effect or on unmount if needed
+        };
+    }, [currentLesson]);
+
+    // Final cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (playerRef.current) {
+                playerRef.current.dispose();
+                playerRef.current = null;
+            }
+        };
     }, []);
+
+    // Calculate progress percentage
+    useEffect(() => {
+        if (course) {
+            const allLessons = getAllLessons(course);
+            if (allLessons.length > 0) {
+                const percentage = Math.round((completedLessons.size / allLessons.length) * 100);
+                setProgressPercentage(percentage);
+            }
+        }
+    }, [completedLessons, course]);
+
+    const getAllLessons = (courseData) => {
+        if (!courseData) return [];
+        if (courseData.sections && courseData.sections.length > 0) {
+            return courseData.sections.flatMap(section => section.lessons || []);
+        } else if (courseData.lessons) {
+            return courseData.lessons;
+        }
+        return [];
+    };
+
+    const markLessonCompleted = async (lessonId) => {
+        const idStr = String(lessonId);
+        
+        // Only trigger completion logic if it's the first time
+        if (!completedLessons.has(idStr)) {
+            setCompletedLessons(prev => {
+                const next = new Set(prev);
+                next.add(idStr);
+                
+                // Save to localStorage for sync with CourseDetailsContent
+                if (user?._id && courseId) {
+                    const progressKey = `progress_${user._id}_${courseId}`;
+                    localStorage.setItem(progressKey, JSON.stringify(Array.from(next)));
+                }
+                
+                return next;
+            });
+
+            try {
+                const token = localStorage.getItem('token');
+                if (token && user?._id && courseId) {
+                    // Force refresh next dashboard visit
+                    sessionStorage.removeItem(`udemy_dashboard_${user._id}`);
+                    sessionStorage.removeItem(`udemy_all_courses`);
+                    
+                    await fetch(`${config.API_BASE_URL}/students/${user._id}/courses/${courseId}/progress`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ lessonId })
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to sync progress:", err);
+            }
+        }
+
+        // 🎯 video complete hone par review modal open - opens every time now
+        setTimeout(() => {
+            openReviewModal();
+        }, 800);
+    };
+
+    const openReviewModal = () => {
+        const modalElement = document.getElementById("review-Add");
+        if (modalElement && window.bootstrap) {
+            const modal = window.bootstrap.Modal.getInstance(modalElement) || new window.bootstrap.Modal(modalElement);
+            modal.show();
+        }
+    };
+
+    const submitReview = async (e) => {
+        e.preventDefault();
+        try {
+            setIsSubmitting(true);
+            const token = localStorage.getItem('token');
+            if (!token) {
+                toast.error("Please login to submit a review");
+                return;
+            }
+
+            const response = await fetch(`${config.API_BASE_URL}/reviews/${courseId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    courseId: courseId,
+                    rating: rating,
+                    comment: reviewText
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                toast.success("Thank you for your review!");
+                setReviewText("");
+                setRating(5);
+            } else {
+                toast.error(data.message || "Failed to submit review");
+            }
+        } catch (error) {
+            console.error("Review submission error:", error);
+            toast.error("An error occurred during submission");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    useEffect(() => {
+        if (course) {
+            const allLessons = getAllLessons(course);
+            if (allLessons.length > 0) {
+                const percentage = Math.round((completedLessons.size / allLessons.length) * 100);
+                setProgressPercentage(percentage);
+            }
+        }
+    }, [completedLessons, course]);
+
+    if (loading) {
+        return <div className="container py-5 text-center"><h4>Loading Video Player...</h4></div>;
+    }
+
+    if (!course) {
+        return <div className="container py-5 text-center"><h4>Course not found</h4></div>;
+    }
+
+    const allLessonsCount = getAllLessons(course).length;
 
     return (
         <>
@@ -19,22 +399,23 @@ function VideoPlayer() {
                     <div className="row">
                         <div className="col-lg-4 col-md-4 col-sm-12">
                             <div className="udemy-alert-content justify-content-start">
-                                <button className="vd-back-btn"> <FontAwesomeIcon icon={faChevronLeft} /> Go back</button>
+                                <button className="vd-back-btn" onClick={() => navigate(-1)}> 
+                                    <FontAwesomeIcon icon={faChevronLeft} /> Go back
+                                </button>
                             </div>
                         </div>
                         <div className="col-lg-4 col-md-4 col-sm-12">
                             <div className="udemy-alert-content justify-content-center">
-                                <p>Make Uber Clone App By Vijay</p>
+                                <p>{getLangText(course.title, userLanguage)}</p>
                             </div>
                         </div>
                         <div className="col-lg-4 col-md-4 col-sm-12">
                             <div className="udemy-alert-content justify-content-end">
-                                <p>Your Progress 0 oof 27(0%)</p>
+                                <p>Your Progress {completedLessons.size} of {allLessonsCount} ({progressPercentage}%)</p>
                             </div>
                         </div>
                     </div>
                 </div>
-
             </section>
 
             <section className="udemy-play-section">
@@ -42,524 +423,240 @@ function VideoPlayer() {
                     <div className="row">
                         <div className="col-lg-8 px-0">
                             <div className="custom-video-wrapper no-radius-video">
-                                <video
-                                    ref={videoRef}
-                                    className="video-js vjs-big-play-centered custom-video"
-                                    controls
-                                    preload="auto"
-                                    poster="/course_banner.png" data-bs-toggle="modal" data-bs-target="#videoModal" >
-
-                                    <source src="/nw-intro.mp4" type="video/mp4" />
-                                </video>
+                                {isYouTube(currentLesson?.videoUrl, userLanguage) ? (
+                                    <div className="youtube-player-container" style={{ position: 'relative', width: '100%', paddingTop: '56.25%' }}>
+                                        <iframe
+                                            id="youtube-player-iframe"
+                                            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: '0px' }}
+                                            src={getYouTubeEmbed(currentLesson.videoUrl, userLanguage) + (getYouTubeEmbed(currentLesson.videoUrl, userLanguage).includes('?') ? '&enablejsapi=1' : '?enablejsapi=1')}
+                                            title={getLangText(currentLesson.title, userLanguage)}
+                                            frameBorder="0"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                            allowFullScreen
+                                        ></iframe>
+                                    </div>
+                                ) : (
+                                    <video
+                                        ref={videoRef}
+                                        className="video-js vjs-big-play-centered custom-video"
+                                        controls
+                                        preload="auto"
+                                        poster={course.thumbnail && !course.thumbnail.startsWith('http') 
+                                            ? `${config.API_BASE_URL.replace('/api', '')}/${course.thumbnail.replace(/\\/g, '/')}`.replace(/\/+/g, '/').replace(':/', '://')
+                                            : (course.thumbnail || course.courseImage || "/course_banner.png")}
+                                    >
+                                    </video>
+                                )}
                             </div>
 
-                              <div className="video-details-content">
-                                      <div className="vd-content-space">
-                                          <h5>Description</h5>
-                                        <p>This video introduces the key concepts covered in this lesson and explains them in a simple, easy-to-understand way. It helps you understand how the topic connects to real-life examples and prepares you for the quiz at the end of the lesson. Watch the full video to complete this lesson and continue your learning progress.</p>
-                                      </div>
+                            <div className="video-details-content">
+                                <div className="vd-content-space">
+                                    <h5>Description</h5>
+                                    <p>{getLangText(currentLesson?.description, userLanguage) || getLangText(course.description, userLanguage)}</p>
+                                </div>
 
-                                      <div className="vd-content-space">
-                                           <h5>What I Will Lean</h5>
-                                        <ul className="video-content-list">
-                                            <li className="vd-content-item">Have the skills to start making money on the side, as a casual freelancer, or full time as a work-from-home freelancer</li>
-                                            <li className="vd-content-item">Easily create a beautiful HTML & CSS website with Bootstrap (that doesn't look like generic Bootstrap websites!)</li>
-                                            <li className="vd-content-item">Convert any static HTML & CSS website into a Custom WordPress Theme</li>
-                                            <li className="vd-content-item">Have a thorough understanding of utilizing PHP to create WordPress websites & themes</li>
-                                        </ul>
-                                      </div>
+                                {course.whatYouWillLearn && (() => {
+                                    const learnList = Array.isArray(course.whatYouWillLearn)
+                                        ? course.whatYouWillLearn
+                                        : (course.whatYouWillLearn[userLanguage === 'Kannada' ? 'kn' : 'en'] || course.whatYouWillLearn.en || []);
+                                    return learnList.length > 0 && (
+                                        <div className="vd-content-space">
+                                            <h5>What I Will Learn</h5>
+                                            <ul className="video-content-list">
+                                                {learnList.map((item, index) => (
+                                                    <li key={index} className="vd-content-item">{item}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    );
+                                })()}
 
-
-                                      <div className="vd-content-space">
-                                           <h5>Requirenments</h5>
-                                        <ul className="video-content-list">
-                                            <li className="vd-content-item pb-0">Have a basic understanding of HTML, CSS and PHP (all courses I offer)</li>
-                                            <li className="vd-content-item pb-0">Proficiency in tools like Premiere Pro / After Effects / Final Cut Pro</li>
-                                            <li className="vd-content-item pb-0">Strong sense of timing, storytelling, and visual flow</li>
-                                            <li className="vd-content-item pb-0">Ability to meet deadlines and follow creative briefs</li>
-                                        </ul>
-                                      </div>
-                               </div>
-
-
+                                {course.requirements && (() => {
+                                    const reqList = Array.isArray(course.requirements)
+                                        ? course.requirements
+                                        : (course.requirements[userLanguage === 'Kannada' ? 'kn' : 'en'] || course.requirements.en || []);
+                                    return reqList.length > 0 && (
+                                        <div className="vd-content-space">
+                                            <h5>Requirements</h5>
+                                            <ul className="video-content-list">
+                                                {reqList.map((item, index) => (
+                                                    <li key={index} className="vd-content-item pb-0">{item}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
                         </div>
+
                         <div className="col-lg-4 video-player-list">
-                            <div className="">
-                                <div className="accordion custom-accordion " id="customAccordion">
-                                <div className="accordion-item">
-                                    <h2 className="accordion-header" id="headingOne">
-                                        <button
-                                            className="accordion-button"
-                                            type="button"
-                                            data-bs-toggle="collapse"
-                                            data-bs-target="#collapseOne"
-                                            aria-expanded="true"
-                                            aria-controls="collapseOne"
+                            <div className="accordion custom-accordion" id="customAccordion">
+                                {course.sections && course.sections.map((section, sIdx) => (
+                                    <div key={section._id || sIdx} className="accordion-item">
+                                        <h2 className="accordion-header" id={`heading${sIdx}`}>
+                                            <button
+                                                className={`accordion-button ${sIdx === 0 ? '' : 'collapsed'}`}
+                                                type="button"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target={`#collapse${sIdx}`}
+                                                aria-expanded={sIdx === 0 ? 'true' : 'false'}
+                                                aria-controls={`collapse${sIdx}`}
+                                            >
+                                                <div className="accordion-title">
+                                                    <span>
+                                                        <b>{sIdx + 1}. {getLangText(section.title, userLanguage)}</b>
+                                                    </span>
+                                                    <div className="accordion-actions">
+                                                        <span className="small text-muted">
+                                                            {section.lessons?.length || 0} Lessons
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        </h2>
+
+                                        <div
+                                            id={`collapse${sIdx}`}
+                                            className={`accordion-collapse collapse ${sIdx === 0 ? 'show' : ''}`}
+                                            aria-labelledby={`heading${sIdx}`}
+                                            data-bs-parent="#customAccordion"
                                         >
-                                            <div className="accordion-title">
+                                            <div className="accordion-body">
+                                                {section.lessons && section.lessons.map((lesson, lIdx) => (
+                                                    <div key={lesson._id || lIdx}>
+                                                        <div 
+                                                            className={`quiz-card cursor-pointer ${currentLesson?._id === lesson._id ? 'bg-light' : ''}`}
+                                                            onClick={() => setCurrentLesson(lesson)}
+                                                            style={{ cursor: 'pointer' }}
+                                                        >
+                                                            <div>
+                                                                <div className="quiz-title">
+                                                                    <FontAwesomeIcon icon={faVideo} className="file-icon" />
+                                                                    <span className={currentLesson?._id === lesson._id ? 'fw-bold' : ''}>
+                                                                        {getLangText(lesson.title, userLanguage)}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="">
+                                                                {completedLessons.has(String(lesson._id)) ? (
+                                                                    <span className="course-com-title text-success">Completed</span>
+                                                                ) : (
+                                                                    <span className="course-time-title">{lesson.duration || 'Video'}</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
 
-                                                <span>
-                                                    <b>1. Chapter 1 -</b> How to Download VS Code
-
-                                                    <a href="#" className="preview-btn ms-2">
-                                                        <FontAwesomeIcon icon={faLock} />
-                                                    </a>
-                                                </span>
-
-                                                <div className="download-notes-box accordion-actions">
-                                                    <button className="udemy-down-btn">Download Notes</button>
-
-                                                </div>
-
+                                                        {/* Quizzes under this lesson */}
+                                                        {lesson.quizzes && lesson.quizzes.map((quiz, qIdx) => (
+                                                            <div key={quiz._id || qIdx} 
+                                                                className={`quiz-card cursor-pointer ${!completedLessons.has(String(lesson._id)) ? 'locked-quiz' : ''}`} 
+                                                                onClick={() => {
+                                                                    if (!completedLessons.has(String(lesson._id))) {
+                                                                        toast.warning("Please first complete the video to unlock the quiz.");
+                                                                        return;
+                                                                    }
+                                                                    navigate(`/course/${courseId}/lesson/${lesson._id}/quiz/${quiz._id}`);
+                                                                }}
+                                                            >
+                                                                <div>
+                                                                    <div className="quiz-title">
+                                                                        {completedLessons.has(String(lesson._id)) ? (
+                                                                            <MdQuiz className="file-icon" />
+                                                                        ) : (
+                                                                            <FontAwesomeIcon icon={faLock} className="file-icon" />
+                                                                        )}
+                                                                        <span>{getLangText(quiz.title, userLanguage) || 'Quiz'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ))}
                                             </div>
-
-
-                                        </button>
-                                    </h2>
-
-                                    <div
-                                        id="collapseOne"
-                                        className="accordion-collapse collapse show"
-                                        aria-labelledby="headingOne"
-                                        data-bs-parent="#customAccordion"
-                                    >
-                                        <div className="accordion-body">
-                                            <div className="quiz-card">
-                                                <div>
-                                                    <a href="#" className="quiz-title">
-                                                        <FontAwesomeIcon icon={faVideo} className="file-icon" />
-                                                        <span>How to Download VS Code</span>
-                                                    </a>
-                                                </div>
-
-                                                <div className="">
-                                                    <span className="course-com-title">Completed</span>
-                                                </div>
-                                            </div>
-                                            <div className="quiz-card">
-                                                <div>
-                                                    <a href="#" className="quiz-title">
-                                                        <FontAwesomeIcon icon={faVideo} className="file-icon" />
-                                                        <span>How to Download VS Code</span>
-                                                    </a>
-                                                </div>
-
-
-                                                <div className="">
-                                                    <span className="course-time-title">1m</span>
-                                                </div>
-                                            </div>
-
-                                            <div className="quiz-card">
-                                                <div>
-                                                    <a href="#" className="quiz-title">
-                                                        <MdQuiz className="file-icon" />
-                                                        <span>Quiz 1</span>
-                                                    </a>
-                                                </div>
-
-
-
-
-
-                                            </div>
-
-
-
                                         </div>
                                     </div>
-                                </div>
-
-                                <div className="accordion-item">
-                                    <h2 className="accordion-header" id="headingTwo">
-                                        <button
-                                            className="accordion-button collapsed"
-                                            type="button"
-                                            data-bs-toggle="collapse"
-                                            data-bs-target="#collapseTwo"
-                                            aria-expanded="false"
-                                            aria-controls="collapseTwo"
-                                        >
-                                            <div className="accordion-title">
-                                                {/* <FaFileAlt className="file-icon" /> */}
-                                                <span>
-
-                                                    <b>2. Chapter 2 -</b> How to Download VS Code
-
-
-
-                                                    <a href="#" className="preview-btn ms-2">
-                                                        <FontAwesomeIcon icon={faLock} />
-                                                    </a>
-                                                </span>
-                                            </div>
-
-                                            <div
-                                                className="accordion-actions">
-                                                <a href="#" className="udemy-down-btn paid-notes-btn">
-                                                    Download Notes
-                                                </a>
-                                            </div>
-
-
-                                        </button>
-
-                                    </h2>
-
-                                    <div
-                                        id="collapseTwo"
-                                        className="accordion-collapse collapse"
-                                        aria-labelledby="headingTwo"
-                                        data-bs-parent="#customAccordion"
+                                ))}
+                                
+                                {/* Fallback if no sections but direct lessons */}
+                                {!course.sections && course.lessons && course.lessons.map((lesson, lIdx) => (
+                                    <div 
+                                        key={lesson._id || lIdx} 
+                                        className={`quiz-card p-3 mb-2 border rounded cursor-pointer ${currentLesson?._id === lesson._id ? 'bg-light' : ''}`}
+                                        onClick={() => setCurrentLesson(lesson)}
                                     >
-                                        <div className="accordion-body">
-                                            <div className="quiz-card">
-                                                <div>
-                                                    <a href="#" className="quiz-title">
-                                                        <FontAwesomeIcon icon={faVideo} className="file-icon" />
-                                                        <span>How to Download VS Code</span>
-                                                    </a>
-                                                </div>
-
-                                                <div className="">
-                                                    <span className="course-com-title">Completed</span>
-                                                </div>
-                                            </div>
-                                            <div className="quiz-card">
-                                                <div>
-                                                    <a href="#" className="quiz-title">
-                                                        <FontAwesomeIcon icon={faVideo} className="file-icon" />
-                                                        <span>How to Download VS Code</span>
-                                                    </a>
-                                                </div>
-
-
-                                                <div className="">
-                                                    <span className="course-time-title">1m</span>
-                                                </div>
-                                            </div>
-
-                                            <div className="quiz-card">
-                                                <div>
-                                                    <a href="#" className="quiz-title">
-                                                        <MdQuiz className="file-icon" />
-                                                        <span>Quiz 1</span>
-                                                    </a>
-                                                </div>
-
-
-
-
-
-                                            </div>
-
+                                        <div className="quiz-title">
+                                            <FontAwesomeIcon icon={faVideo} className="file-icon" />
+                                            <span>{getLangText(lesson.title, userLanguage)}</span>
                                         </div>
                                     </div>
-                                </div>
-
-
-                                <div className="accordion-item">
-                                    <h2 className="accordion-header" id="headingThree">
-                                        <button
-                                            className="accordion-button collapsed"
-                                            type="button"
-                                            data-bs-toggle="collapse"
-                                            data-bs-target="#collapseThree"
-                                            aria-expanded="false"
-                                            aria-controls="collapseThree"
-                                        >
-                                            <div className="accordion-title">
-
-                                                <span>
-                                                    <b>3. Chapter 3 -</b> How to Download VS Code
-                                                    <a href="#" className="preview-btn ms-2">
-                                                        <FontAwesomeIcon icon={faLock} />
-                                                    </a>
-                                                </span>
-                                            </div>
-
-
-                                        </button>
-                                    </h2>
-
-                                    <div
-                                        id="collapseThree"
-                                        className="accordion-collapse collapse"
-                                        aria-labelledby="headingThree"
-                                        data-bs-parent="#customAccordion"
-                                    >
-                                        <div className="accordion-body">
-                                            <div className="quiz-card">
-                                                <div>
-                                                    <a href="#" className="quiz-title">
-                                                        <FontAwesomeIcon icon={faVideo} className="file-icon" />
-                                                        <span>How to Download VS Code</span>
-                                                    </a>
-                                                </div>
-
-                                                <div className="">
-                                                    <span className="course-com-title">Completed</span>
-                                                </div>
-                                            </div>
-                                            <div className="quiz-card">
-                                                <div>
-                                                    <a href="#" className="quiz-title">
-                                                        <FontAwesomeIcon icon={faVideo} className="file-icon" />
-                                                        <span>How to Download VS Code</span>
-                                                    </a>
-                                                </div>
-
-
-                                                <div className="">
-                                                    <span className="course-time-title">1m</span>
-                                                </div>
-                                            </div>
-
-                                            <div className="quiz-card">
-                                                <div>
-                                                    <a href="#" className="quiz-title">
-                                                        <MdQuiz className="file-icon" />
-                                                        <span>Quiz 1</span>
-                                                    </a>
-                                                </div>
-
-
-
-
-
-                                            </div>
-
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="accordion-item">
-                                    <h2 className="accordion-header" id="headingFour">
-                                        <button
-                                            className="accordion-button collapsed"
-                                            type="button"
-                                            data-bs-toggle="collapse"
-                                            data-bs-target="#collapseFour"
-                                            aria-expanded="false"
-                                            aria-controls="headingFour"
-                                        >
-                                            <div className="accordion-title">
-
-                                                <span>
-                                                    <b>4. Chapter 4 -</b> How to Download VS Code
-
-                                                    <a href="#" className="preview-btn ms-2">
-                                                        <FontAwesomeIcon icon={faLock} />
-                                                    </a>
-                                                </span>
-                                            </div>
-
-
-                                        </button>
-                                    </h2>
-
-                                    <div
-                                        id="collapseFour"
-                                        className="accordion-collapse collapse"
-                                        aria-labelledby="headingFour"
-                                        data-bs-parent="#customAccordion"
-                                    >
-                                        <div className="accordion-body">
-                                            <div className="quiz-card">
-                                                <div>
-                                                    <a href="#" className="quiz-title">
-                                                        <FontAwesomeIcon icon={faVideo} className="file-icon" />
-                                                        <span>How to Download VS Code</span>
-                                                    </a>
-                                                </div>
-
-                                                <div className="">
-                                                    <span className="course-com-title">Completed</span>
-                                                </div>
-                                            </div>
-                                            <div className="quiz-card">
-                                                <div>
-                                                    <a href="#" className="quiz-title">
-                                                        <FontAwesomeIcon icon={faVideo} className="file-icon" />
-                                                        <span>How to Download VS Code</span>
-                                                    </a>
-                                                </div>
-
-
-                                                <div className="">
-                                                    <span className="course-time-title">1m</span>
-                                                </div>
-                                            </div>
-
-                                            <div className="quiz-card">
-                                                <div>
-                                                    <a href="#" className="quiz-title">
-                                                        <MdQuiz className="file-icon" />
-                                                        <span>Quiz 1</span>
-                                                    </a>
-                                                </div>
-
-
-
-
-
-                                            </div>
-
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="accordion-item">
-                                    <h2 className="accordion-header" id="headingFive">
-                                        <button
-                                            className="accordion-button collapsed"
-                                            type="button"
-                                            data-bs-toggle="collapse"
-                                            data-bs-target="#collapseFive"
-                                            aria-expanded="false"
-                                            aria-controls="headingFive"
-                                        >
-                                            <div className="accordion-title">
-
-                                                <span>
-                                                    <b>5. Chapter 5 -</b> How to Download VS Code
-
-                                                    <a href="#" className="preview-btn ms-2">
-                                                        <FontAwesomeIcon icon={faLock} />
-                                                    </a>
-                                                </span>
-                                            </div>
-
-                                            <div
-                                                className="accordion-actions">
-                                                <a href="#" className="udemy-down-btn">
-                                                    Download
-                                                </a>
-                                            </div>
-                                        </button>
-                                    </h2>
-
-                                    <div
-                                        id="collapseFive"
-                                        className="accordion-collapse collapse"
-                                        aria-labelledby="headingFive"
-                                        data-bs-parent="#customAccordion"
-                                    >
-                                        <div className="accordion-body">
-                                            <div className="quiz-card">
-                                                <div>
-                                                    <a href="#" className="quiz-title">
-                                                        <FontAwesomeIcon icon={faVideo} className="file-icon" />
-                                                        <span>How to Download VS Code</span>
-                                                    </a>
-                                                </div>
-
-                                                <div className="">
-                                                    <span className="course-com-title">Completed</span>
-                                                </div>
-                                            </div>
-                                            <div className="quiz-card">
-                                                <div>
-                                                    <a href="#" className="quiz-title">
-                                                        <FontAwesomeIcon icon={faVideo} className="file-icon" />
-                                                        <span>How to Download VS Code</span>
-                                                    </a>
-                                                </div>
-
-
-                                                <div className="">
-                                                    <span className="course-time-title">1m</span>
-                                                </div>
-                                            </div>
-
-                                            <div className="quiz-card">
-                                                <div>
-                                                    <a href="#" className="quiz-title">
-                                                        <MdQuiz className="file-icon" />
-                                                        <span>Quiz 1</span>
-                                                    </a>
-                                                </div>
-
-                                            </div>
-
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                                ))}
                             </div>
                         </div>
-
                     </div>
                 </div>
-
-
             </section>
 
-
-
-            {/* payment Successful Popup Start  */}
-            {/* data-bs-toggle="modal" data-bs-target="#videoModal" */}
-            <div className="modal step-modal fade" id="videoModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
+            <div className="modal step-modal fade" id="review-Add" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
                 aria-labelledby="staticBackdropLabel" aria-hidden="true">
-                <div className="modal-dialog modal-dialog-centered modal-lg">
+                <div className="modal-dialog modal-dialog-centered modal-md">
                     <div className="modal-content custom-modal-box success-modal">
-                         <div className="text-end">
-                           <button type="button" className="modal-close-btn text-black fz-18" data-bs-dismiss="modal" aria-label="Close">
-                                 <FontAwesomeIcon icon={faClose} />
-                             </button>
+                        <div className="text-end p-2">
+                            <button type="button" className="modal-close-btn" data-bs-dismiss="modal" aria-label="Close">
+                                <FontAwesomeIcon icon={faClose} />
+                            </button>
                         </div>
-
-                        <div className="optional-content-box px-3">
-                            <h3>Optional Questions</h3>
-                        </div>
-
-                        <div className="modal-body px-3">
+                        <div className="modal-body px-4 pt-0">
                             <div className="row ">
                                 <div className="col-lg-12">
-                                   <div className="video-optional-content">
-                                    <h6>What is Frontend Development?</h6>
+                                    <form onSubmit={submitReview}>
+                                        <div className="offer-modal-content">
+                                            <span className="offer-modal-icon"> <MdRateReview /> </span>
+                                            <h6 className="fz-24 fw-700">How was your learning experience? Share a quick review!</h6>
 
-                                    <div className="zx-radio-group">
-  
-                                <label className="zx-radio-card">
-                                    <input type="radio" name="plan" />
-                                    <span className="zx-radio-ui"></span>
-                                    <span className="zx-radio-text">Development of server-side logic and databases</span>
-                                </label>
+                                            <div className="cart-details-bx d-flex align-items-center justify-content-center">
+                                                <ul className="rating-list">
+                                                    {[1,2,3,4,5].map((star) => (
+                                                        <li key={star} className="rating-item">
+                                                            <a
+                                                                href="#"
+                                                                className="review-ration-btn fz-24"
+                                                                onClick={(e) => { e.preventDefault(); setRating(star); }}
+                                                            >
+                                                                {star <= rating ? <IoIosStar /> : <IoIosStarOutline />}
+                                                            </a>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        </div>
 
-                                <label className="zx-radio-card">
-                                    <input type="radio" name="plan" />
-                                    <span className="zx-radio-ui"></span>
-                                    <span className="zx-radio-text">Development of server-side logic and databases</span>
-                                </label>
+                                        <div className="custom-frm-bx">
+                                            <textarea
+                                                className="form-control"
+                                                style={{ height: "120px" }}
+                                                placeholder="Write here Something(Optional)"
+                                                value={reviewText}
+                                                onChange={(e) => setReviewText(e.target.value)}
+                                            ></textarea>
+                                        </div>
 
-                                <label className="zx-radio-card">
-                                    <input type="radio" name="plan" />
-                                    <span className="zx-radio-ui"></span>
-                                    <span className="zx-radio-text">Development of server-side logic and databases</span>
-                                </label>
-                                <label className="zx-radio-card">
-                                    <input type="radio" name="plan" />
-                                    <span className="zx-radio-ui"></span>
-                                    <span className="zx-radio-text">Development of server-side logic and databases</span>
-                                </label>
+                                        <div className="mt-4 text-center">
+                                            <button
+                                                type="submit"
+                                                className="thm-btn px-5"
+                                                data-bs-dismiss="modal"
+                                                disabled={isSubmitting}
+                                            >
+                                                {isSubmitting ? "Submitting..." : "Submit Review"}
+                                            </button>
+                                        </div>
+                                    </form>
                                 </div>
-                                   </div>
-
-                                </div>
-
-
-                                <div className="d-flex align-items-center gap-3 justify-content-end mt-3">
-                                    <button className="skip-btn">Skip for now</button>
-                                    <button className="thm-btn px-4" data-bs-dismiss="modal" aria-label="Close">Submit</button>
-                                </div>
-
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            {/*  payment Successful Popup End */}
         </>
     )
 }

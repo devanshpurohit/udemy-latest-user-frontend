@@ -19,8 +19,11 @@ export const SocketProvider = ({ children }) => {
         if (isAuthenticated) {
             console.log('🔌 Connecting to socket server:', config.SOCKET_URL);
             newSocket = io(config.SOCKET_URL, {
-                reconnectionAttempts: 5,
+                reconnection: true,
+                reconnectionAttempts: 20,
                 reconnectionDelay: 1000,
+                transports: ['polling', 'websocket'],
+                withCredentials: true
             });
 
             newSocket.on('connect', () => {

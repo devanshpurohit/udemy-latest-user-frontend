@@ -10,6 +10,7 @@ function MyAccount() {
     const { user: authUser, setUser: setAuthUser } = useAuth();
     const [user, setUser] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
+    const [isEditingBilling, setIsEditingBilling] = useState(false);
     const [profileImage, setProfileImage] = useState(null);
     const [formData, setFormData] = useState({
         name: '',
@@ -18,15 +19,24 @@ function MyAccount() {
         countryCode: '+91',
         language: 'English'
     });
+    const [billingFormData, setBillingFormData] = useState({
+        fullName: '',
+        email: '',
+        country: '',
+        address: '',
+        city: '',
+        state: '',
+        zipCode: ''
+    });
     const [loading, setLoading] = useState(false);
+    const [billingLoading, setBillingLoading] = useState(false);
     const [message, setMessage] = useState('');
+    const [billingMessage, setBillingMessage] = useState('');
 
     useEffect(() => {
         // Use auth user instead of localStorage
         if (authUser) {
             console.log('MyAccount - FULL AUTH USER:', authUser);
-            console.log('MyAccount - Auth user profile image:', authUser.profile?.profileImage);
-            console.log('MyAccount - Auth user flat profileImage:', authUser.profileImage);
             setUser(authUser);
             setFormData({
                 name: authUser.username || authUser.name || '',
@@ -34,6 +44,17 @@ function MyAccount() {
                 phone: authUser.profile?.phone || '',
                 countryCode: authUser.profile?.countryCode || '+91',
                 language: authUser.profile?.language || 'English'
+            });
+
+            // Initialize billing form data
+            setBillingFormData({
+                fullName: authUser.billing?.fullName || '',
+                email: authUser.billing?.email || '',
+                country: authUser.billing?.country || '',
+                address: authUser.billing?.address || '',
+                city: authUser.billing?.city || '',
+                state: authUser.billing?.state || '',
+                zipCode: authUser.billing?.zipCode || ''
             });
             
             // Set profile image from auth user
@@ -110,7 +131,6 @@ function MyAccount() {
             reader.readAsDataURL(file);
         }
     };
-
     const handleChange = (e) => {
         setFormData({
             ...formData,
@@ -125,39 +145,38 @@ function MyAccount() {
         setMessage('');
 
         try {
-       const updateData = {
-    ...formData,
-    profile: {
-        profileImage: profileImage
-    }
-};
+            const updateData = {
+                ...formData,
+                profile: {
+                    profileImage: profileImage
+                }
+            };
 
             const result = await updateProfile(updateData);
 
             if (result.success) {
                 setMessage('Profile updated successfully!');
-             setAuthUser(prev => ({
-    ...prev,
-    ...result.data.user,
-    profile: {
-        ...prev?.profile,
-        ...result.data.user?.profile
-    }
-}));
-                
+                setAuthUser(prev => ({
+                    ...prev,
+                    ...result.data.user,
+                    profile: {
+                        ...prev?.profile,
+                        ...result.data.user?.profile
+                    }
+                }));
+
                 // Update profile image state immediately
                 if (result.data.user?.profile?.profileImage) {
                     const profImg = result.data.user.profile.profileImage;
                     const imageUrl = profImg.includes('boy.png')
                         ? '/boy.png'
-                        : profImg.startsWith('data:') 
+                        : profImg.startsWith('data:')
                         ? profImg
                         : profImg.startsWith('http')
                         ? profImg
                         : `${config.API_BASE_URL.replace('/api', '')}${profImg.startsWith('/') ? '' : '/'}${profImg}`;
-                    
+
                     setProfileImage(imageUrl);
-                    console.log('MyAccount - Profile image updated from response:', imageUrl);
                 }
             } else {
                 setMessage(result.message);
@@ -170,9 +189,55 @@ function MyAccount() {
         }
     };
 
+    const handleBillingChange = (e) => {
+        setBillingFormData({
+            ...billingFormData,
+            [e.target.name]: e.target.value
+        });
+    };
+
+    const handleBillingSubmit = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setBillingLoading(true);
+        setBillingMessage('');
+
+        try {
+            const updateData = {
+                billing: billingFormData
+            };
+
+            const result = await updateProfile(updateData);
+
+            if (result.success) {
+                setBillingMessage('Billing information updated successfully!');
+                setAuthUser(prev => ({
+                    ...prev,
+                    ...result.data.user,
+                    billing: {
+                        ...prev?.billing,
+                        ...result.data.user?.billing
+                    }
+                }));
+            } else {
+                setBillingMessage(result.message);
+            }
+
+        } catch (error) {
+            setBillingMessage('Error updating billing information');
+        } finally {
+            setBillingLoading(false);
+        }
+    };
+
     const toggleEdit = () => {
         setIsEditing(!isEditing);
         setMessage('');
+    };
+
+    const toggleBillingEdit = () => {
+        setIsEditingBilling(!isEditingBilling);
+        setBillingMessage('');
     };
     return (
         <>
@@ -396,7 +461,6 @@ function MyAccount() {
                                                                     className="form-select"
                                                                 >
                                                                     <option value="English">English</option>
-                                                                    <option value="Hindi">Hindi</option>
                                                                     <option value="Spanish">Spanish</option>
                                                                 </select>
                                                             </div>
@@ -416,13 +480,13 @@ function MyAccount() {
                                             </div>
                                         </div>
 
-                                        <div
+                                         <div
                                             className="tab-pane fade"
                                             id="profile"
                                             role="tabpanel"
                                         >
                                             <div className="course-card">
-                                                <form action="">
+                                                <form onSubmit={handleBillingSubmit}>
                                                     <div className="row">
                                                         <div className="d-flex align-items-center justify-content-between mb-3">
                                                             <div>
@@ -430,74 +494,142 @@ function MyAccount() {
                                                             </div>
 
                                                             <div>
-                                                                <a href="#" className="edit-profile-btn"> <FontAwesomeIcon icon={faPencil} /> </a>
+                                                                {isEditingBilling ? (
+                                                                    <button 
+                                                                        type="submit" 
+                                                                        className="thm-btn"
+                                                                        disabled={billingLoading}
+                                                                    >
+                                                                        {billingLoading ? 'Saving...' : 'Save'}
+                                                                    </button>
+                                                                ) : (
+                                                                    <button 
+                                                                        type="button" 
+                                                                        className="edit-profile-btn"
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            e.stopPropagation();
+                                                                            toggleBillingEdit();
+                                                                        }}
+                                                                    >
+                                                                        <FontAwesomeIcon icon={faPencil} />
+                                                                    </button>
+                                                                )}
                                                             </div>
 
                                                         </div>
+
+                                                        {billingMessage && (
+                                                            <div className={`alert ${billingMessage.includes('success') ? 'alert-success' : 'alert-danger'} mt-2`}>
+                                                                {billingMessage}
+                                                            </div>
+                                                        )}
 
                                                         <div className="col-lg-6">
                                                             <div className="custom-frm-bx">
-                                                                <input type="text" className="form-control" placeholder="Enter Full Name" />
+                                                                <input 
+                                                                    type="text" 
+                                                                    name="fullName"
+                                                                    className="form-control" 
+                                                                    placeholder="Enter Full Name" 
+                                                                    value={billingFormData.fullName}
+                                                                    onChange={handleBillingChange}
+                                                                    disabled={!isEditingBilling}
+                                                                />
                                                             </div>
                                                         </div>
                                                         <div className="col-lg-6">
                                                             <div className="custom-frm-bx">
-                                                                <input type="email" className="form-control" placeholder="Enter Email Address" />
+                                                                <input 
+                                                                    type="email" 
+                                                                    name="email"
+                                                                    className="form-control" 
+                                                                    placeholder="Enter Email Address" 
+                                                                    value={billingFormData.email}
+                                                                    onChange={handleBillingChange}
+                                                                    disabled={!isEditingBilling}
+                                                                />
                                                             </div>
                                                         </div>
 
                                                         <div className="col-lg-12">
                                                             <div className="custom-frm-bx">
-                                                                <select name="" id="" className="form-select">
-                                                                    <option value="">Country/Regions</option>
-                                                                </select>
-
+                                                                <input 
+                                                                    type="text" 
+                                                                    name="country"
+                                                                    className="form-control" 
+                                                                    placeholder="Country/Regions" 
+                                                                    value={billingFormData.country}
+                                                                    onChange={handleBillingChange}
+                                                                    disabled={!isEditingBilling}
+                                                                />
                                                             </div>
-
                                                         </div>
 
                                                         <div className="col-lg-12">
                                                             <div className="custom-frm-bx">
-                                                                <input type="text" className="form-control" placeholder="Address(Street Address)" />
-
+                                                                <input 
+                                                                    type="text" 
+                                                                    name="address"
+                                                                    className="form-control" 
+                                                                    placeholder="Address(Street Address)" 
+                                                                    value={billingFormData.address}
+                                                                    onChange={handleBillingChange}
+                                                                    disabled={!isEditingBilling}
+                                                                />
                                                             </div>
-
                                                         </div>
                                                         <div className="col-lg-4">
                                                             <div className="custom-frm-bx">
-                                                                <input type="text" className="form-control" placeholder="Enter City" />
-
+                                                                <input 
+                                                                    type="text" 
+                                                                    name="city"
+                                                                    className="form-control" 
+                                                                    placeholder="Enter City" 
+                                                                    value={billingFormData.city}
+                                                                    onChange={handleBillingChange}
+                                                                    disabled={!isEditingBilling}
+                                                                />
                                                             </div>
-
                                                         </div>
 
                                                         <div className="col-lg-4">
                                                             <div className="custom-frm-bx">
-                                                                <select name="" id="" className="form-select">
-                                                                    <option value="">English</option>
-                                                                </select>
-
+                                                                <input 
+                                                                    type="text" 
+                                                                    name="state"
+                                                                    className="form-control" 
+                                                                    placeholder="Enter State" 
+                                                                    value={billingFormData.state}
+                                                                    onChange={handleBillingChange}
+                                                                    disabled={!isEditingBilling}
+                                                                />
                                                             </div>
-
                                                         </div>
 
                                                         <div className="col-lg-4">
                                                             <div className="custom-frm-bx">
-                                                                <input type="text" className="form-control" placeholder="Enter Zip Code" />
-
+                                                                <input 
+                                                                    type="text" 
+                                                                    name="zipCode"
+                                                                    className="form-control" 
+                                                                    placeholder="Enter Zip Code" 
+                                                                    value={billingFormData.zipCode}
+                                                                    onChange={handleBillingChange}
+                                                                    disabled={!isEditingBilling}
+                                                                />
                                                             </div>
-
                                                         </div>
 
-                                                        <div className="col-lg-12">
-                                                            <div className="mt-2 text-center">
-                                                                <button className="thm-btn px-5">Saved</button>
-
+                                                        {isEditingBilling && (
+                                                            <div className="col-lg-12">
+                                                                <div className="mt-2 text-center">
+                                                                    <button type="submit" className="thm-btn px-5" disabled={billingLoading}>
+                                                                        {billingLoading ? 'Saving...' : 'Save'}
+                                                                    </button>
+                                                                </div>
                                                             </div>
-                                                        </div>
-
-
-
+                                                        )}
                                                     </div>
                                                 </form>
                                             </div>

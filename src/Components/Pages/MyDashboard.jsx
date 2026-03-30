@@ -1,22 +1,45 @@
-import { faDownload, faEye, faSearch, faStar, faStarHalf, faUser } from "@fortawesome/free-solid-svg-icons"
+import { faDownload, faEye, faSearch, faStar, faStarHalf, faUser, faFilePdf } from "@fortawesome/free-solid-svg-icons"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 import { FaMoneyBill } from "react-icons/fa";
 import { FaBookOpen } from "react-icons/fa";
 import { MdBook, MdChevronLeft, MdChevronRight } from "react-icons/md";
+import config from "../../config/config";
+
+const normalizeMediaUrl = (url) => {
+    if (!url) return "/pic_01.jpg";
+    if (url.startsWith('http') || url.startsWith('data:')) return url;
+    
+    // Normalize path: replace backslashes, extract only the part after 'uploads' or root
+    let cleanPath = url.replace(/\\/g, '/');
+    if (cleanPath.includes('/uploads/')) {
+        cleanPath = '/uploads/' + cleanPath.split('/uploads/').pop();
+    }
+    
+    if (!cleanPath.startsWith('/')) {
+        cleanPath = '/' + cleanPath;
+    }
+
+    const baseUrl = config.API_BASE_URL.replace('/api', '');
+    return encodeURI(`${baseUrl}${cleanPath}`.replace(/\/+/g, '/').replace(':/', '://'));
+};
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from "react-router-dom";
-import { getDashboardData } from '../../services/apiService';
-import { getCurrentUser } from '../../services/apiService';
+import { getDashboardData, getAllCourses, getCurrentUser, getCachedDashboardData, getCachedAllCourses } from '../../services/apiService';
 import { useAuth } from '../../contexts/AuthContext';
 import { getBackendBaseUrl } from '../../config/backendConfig';
 import certificateService from "../../services/certificateService";
 import { toast } from "react-toastify";
 import { faClose } from "@fortawesome/free-solid-svg-icons";
+import CourseCard from '../Common/CourseCard';
+import { getLangText } from "../../utils/languageUtils";
 
 function MyDashboard() {
     const navigate = useNavigate();
     const { user: authUser } = useAuth();
+    const userLanguage = authUser?.profile?.language || 'English';
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [allCourses, setAllCourses] = useState([]);
@@ -48,18 +71,53 @@ function MyDashboard() {
     // Search and Sort states
     const [certSearch, setCertSearch] = useState("");
     const [orderSearch, setOrderSearch] = useState("");
+    const [courseStatus, setCourseStatus] = useState("All");
+    const [activeTab, setActiveTab] = useState("home");
 
     useEffect(() => {
-        // Use auth user instead of localStorage
+        const initDashboard = async () => {
+            if (authUser) {
+                // Instant cache load
+                const cachedDash = getCachedDashboardData();
+                const cachedCourses = getCachedAllCourses();
+                
+                if (cachedDash && cachedDash.data) {
+                    setDashboardData(prev => ({
+                        ...prev,
+                        ...cachedDash.data,
+                        stats: {
+                            totalEnrolled: cachedDash.data.enrolledCourses?.length || 0,
+                            totalActive: cachedDash.data.activeCourses?.length || 0,
+                            totalCompleted: cachedDash.data.allCourses?.length || 0,
+                            totalQuizzes: cachedDash.data.stats?.totalQuizzes || 0
+                        }
+                    }));
+                    setLoading(false);
+                }
+                
+                if (cachedCourses && cachedCourses.data) {
+                    setAllCourses(cachedCourses.data);
+                }
+
+                console.log('🔍 MyDashboard: Initializing with user:', authUser._id);
+                
+                // Fetch both dashboard and all courses in parallel
+                await Promise.all([
+                    loadDashboardData(),
+                    loadAllCourses()
+                ]);
+                
+                setLoading(false);
+            } else {
+                // If no authUser, we might be loading or logged out
+                // the AuthContext should handle redirection if needed
+                console.log('🔍 MyDashboard: No authUser yet...');
+            }
+        };
+
         if (authUser) {
-            console.log('🔍 Dashboard - User from auth context:', authUser);
-            console.log('🔍 Dashboard - Profile image from auth context:', authUser?.profile?.profileImage);
-            
-            setUser(authUser);
-            loadDashboardData();
-            loadAllCourses();
+            initDashboard();
         }
-        setLoading(false);
     }, [authUser]);
 
     // Reset pagination when search changes
@@ -73,56 +131,19 @@ function MyDashboard() {
 
     const loadDashboardData = async () => {
         try {
-            console.log('🔍 Loading dashboard data...');
+            if (!dashboardData.enrolledCourses.length) {
+                setLoading(true);
+            }
+            console.log('🔍 MyDashboard: Fetching fresh dashboard data (cache bypassed)...');
+            const response = await getDashboardData(false); // Force fresh data
             
-            const token = localStorage.getItem("token");
+            if (response.success && response.data) {
+                const data = response.data;
+                console.log('🔍 MyDashboard: Dashboard data loaded', response.fromCache ? '(from cache)' : '(from API)');
 
-            const res = await fetch(
-                `${getBackendBaseUrl()}/api/users/dashboard`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                }
-            );
-
-            const data = await res.json();
-
-            console.log('🔍 Dashboard API result:', data);
-            
-            if (data.success) {
-                console.log('🔍 Setting dashboard data:', data);
-                
-                // DEBUG: Check image fields
-                console.log('=== DEBUG: Frontend Courses ===');
-                data.activeCourses.forEach((course, index) => {
-                    console.log(`Course ${index + 1}:`, {
-                        _id: course._id,
-                        title: course.title,
-                        image: course.image,
-                        thumbnail: course.thumbnail,
-                        courseImage: course.courseImage
-                    });
-                });
-                
-                // DEBUG: Check orders data
-                console.log('=== DEBUG: Orders Data ===');
-                console.log('Orders length:', data.orders?.length || 0);
-                if (data.orders && data.orders.length > 0) {
-                    data.orders.forEach((order, index) => {
-                        console.log(`Order ${index + 1}:`, {
-                            _id: order._id,
-                            orderId: order.orderId,
-                            courseId: order.courseId,
-                            amount: order.amount,
-                            paymentStatus: order.paymentStatus
-                        });
-                    });
-                }
-                
                 // Use real data from API
                 const realData = data;
-                
+
                 // Calculate stats from real data
                 const stats = {
                     totalEnrolled: realData.enrolledCourses?.length || 0,
@@ -130,7 +151,7 @@ function MyDashboard() {
                     totalCompleted: realData.allCourses?.length || 0,
                     totalQuizzes: data.stats?.totalQuizzes || 0
                 };
-                
+
                 setDashboardData({
                     enrolledCourses: realData.enrolledCourses || [],
                     completedCourses: realData.allCourses || [],
@@ -193,30 +214,28 @@ function MyDashboard() {
 
     const loadAllCourses = async () => {
         try {
-            console.log('🔍 Loading all courses...');
-            
-            const res = await fetch(
-                `${getBackendBaseUrl()}/api/public/courses`
-            );
+            if (allCourses.length === 0 && !dashboardData.enrolledCourses.length) {
+                setLoading(true);
+            }
+            console.log('🔍 MyDashboard: Loading all courses fresh (cache bypassed)...');
+            const response = await getAllCourses(false); // Force fresh data
 
-            const data = await res.json();
-
-            if (data.success) {
-                console.log('✅ All courses loaded:', data.data.length);
-                setAllCourses(data.data);
+            if (response.success && response.data) {
+                console.log('✅ MyDashboard: All courses loaded:', response.data.length, response.fromCache ? '(from cache)' : '');
+                setAllCourses(response.data);
             }
         } catch (error) {
-            console.error('❌ Error loading courses:', error);
+            console.error('❌ MyDashboard: Error loading courses:', error);
         }
     };
 
     const filteredCertificates = useMemo(() => {
         let result = [...(dashboardData.certificates || [])];
-        
+
         // Search filter
         if (certSearch) {
-            result = result.filter(cert => 
-                cert.courseTitle?.toLowerCase().includes(certSearch.toLowerCase()) ||
+            result = result.filter(cert =>
+                getLangText(cert.courseTitle, userLanguage).toLowerCase().includes(certSearch.toLowerCase()) ||
                 cert.certificateId?.toLowerCase().includes(certSearch.toLowerCase())
             );
         }
@@ -236,9 +255,9 @@ function MyDashboard() {
 
         // Search filter
         if (orderSearch) {
-            result = result.filter(order => 
+            result = result.filter(order =>
                 order.orderId?.toLowerCase().includes(orderSearch.toLowerCase()) ||
-                order.courseId?.title?.toLowerCase().includes(orderSearch.toLowerCase())
+                getLangText(order.courseId?.title, userLanguage).toLowerCase().includes(orderSearch.toLowerCase())
             );
         }
 
@@ -252,17 +271,36 @@ function MyDashboard() {
         return result;
     }, [dashboardData.orders, orderSearch]);
 
+    const filteredEnrolledCourses = useMemo(() => {
+        let result = [...dashboardData.enrolledCourses];
+
+        if (courseStatus === "Not Started") {
+            result = result.filter(c => (c.progressPercentage || 0) === 0);
+        } else if (courseStatus === "Complete") {
+            result = result.filter(c => (c.progressPercentage || 0) === 100);
+        } else if (courseStatus === "In Progress" || courseStatus === "Pending") {
+            result = result.filter(c => (c.progressPercentage || 0) > 0 && (c.progressPercentage || 0) < 100);
+        }
+
+        return result;
+    }, [dashboardData.enrolledCourses, courseStatus]);
+
     const paginatedCourses = useMemo(() => {
         const startIndex = (currentCoursePage - 1) * itemsPerPage;
-        return allCourses.slice(startIndex, startIndex + itemsPerPage);
-    }, [allCourses, currentCoursePage]);
+        const source = activeTab === 'all' ? allCourses : filteredEnrolledCourses;
+        return source.slice(startIndex, startIndex + itemsPerPage);
+    }, [filteredEnrolledCourses, allCourses, activeTab, currentCoursePage]);
+
+    const totalCoursePages = useMemo(() => {
+        const source = activeTab === 'all' ? allCourses : filteredEnrolledCourses;
+        return Math.ceil(source.length / itemsPerPage);
+    }, [filteredEnrolledCourses, allCourses, activeTab]);
 
     const paginatedOrders = useMemo(() => {
         const startIndex = (currentOrderPage - 1) * itemsPerPage;
         return filteredOrders.slice(startIndex, startIndex + itemsPerPage);
     }, [filteredOrders, currentOrderPage]);
 
-    const totalCoursePages = Math.ceil(allCourses.length / itemsPerPage);
     const totalOrderPages = Math.ceil(filteredOrders.length / itemsPerPage);
 
     const handleViewOrder = (order) => {
@@ -299,12 +337,63 @@ function MyDashboard() {
             setCertificateLoading(true);
             const response = await certificateService.getCertificate(certificateId);
             if (response.success) {
-                // If the backend returns a URL or we need to print, 
-                // for now we'll just open the view modal and let them print
-                // or if there's a specific download logic, implement it here.
-                setViewingCertificate(response.data.certificate);
-                setShowCertificateModal(true);
-                toast.info("Opening certificate for download/print");
+                const cert = response.data.certificate;
+                const doc = new jsPDF({
+                    orientation: 'landscape',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+
+                // Certificate Design
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+
+                // Simple Border
+                doc.setDrawColor(20, 20, 20);
+                doc.setLineWidth(2);
+                doc.rect(10, 10, pageWidth - 20, pageHeight - 20);
+                doc.setLineWidth(0.5);
+                doc.rect(12, 12, pageWidth - 24, pageHeight - 24);
+
+                // Content
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(40);
+                doc.setTextColor(33, 37, 41);
+                doc.text("CERTIFICATE", pageWidth / 2, 50, { align: "center" });
+                
+                doc.setFontSize(20);
+                doc.text("OF COMPLETION", pageWidth / 2, 65, { align: "center" });
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(16);
+                doc.text("This is to certify that", pageWidth / 2, 90, { align: "center" });
+
+                doc.setFont("helvetica", "bolditalic");
+                doc.setFontSize(28);
+                doc.setTextColor(0, 86, 179); // A nice blue
+                doc.text(user?.username || "Student Name", pageWidth / 2, 110, { align: "center" });
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(16);
+                doc.setTextColor(33, 37, 41);
+                doc.text("has successfully completed the course", pageWidth / 2, 130, { align: "center" });
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(22);
+                doc.text(getLangText(cert.courseTitle, userLanguage), pageWidth / 2, 150, { align: "center" });
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(12);
+                const issueDate = new Date(cert.completedAt || cert.issuedAt).toLocaleDateString();
+                doc.text(`Issued on: ${issueDate}`, pageWidth / 2, 170, { align: "center" });
+                doc.text(`Certificate ID: ${cert.certificateId}`, pageWidth / 2, 180, { align: "center" });
+
+                // Footer / Branding
+                doc.setFontSize(14);
+                doc.text("Udemy Academy", pageWidth / 2, 195, { align: "center" });
+
+                doc.save(`Certificate_${cert.certificateId}.pdf`);
+                toast.success("Certificate downloaded successfully!");
             }
         } catch (error) {
             console.error(error);
@@ -314,11 +403,67 @@ function MyDashboard() {
         }
     };
 
-    if (loading) {
+    const handleDownloadOrder = (order) => {
+        try {
+            const doc = new jsPDF();
+            
+            // Header
+            doc.setFontSize(20);
+            doc.setTextColor(40, 40, 40);
+            doc.text("INVOICE / RECEIPT", 105, 20, { align: "center" });
+            
+            doc.setFontSize(10);
+            doc.text("Udemy Academy", 14, 35);
+            doc.text("Online Learning Platform", 14, 40);
+            
+            // Order Info
+            doc.setFont("helvetica", "bold");
+            doc.text(`Order ID: ${order.orderId}`, 14, 55);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Date: ${new Date(order.createdAt || order.updatedAt).toLocaleDateString()}`, 14, 60);
+            doc.text(`User: ${user?.username || "Student"}`, 14, 65);
+            doc.text(`Email: ${user?.email || "N/A"}`, 14, 70);
+
+            // Table
+            const body = [[
+                "1.",
+                getLangText(order.courseId?.title, userLanguage) || "Course Details",
+                order.paymentMethod || "Online",
+                `INR ${order.amount}`
+            ]];
+
+            autoTable(doc, {
+                startY: 80,
+                head: [['S.No', 'Course Description', 'Method', 'Total Amount']],
+                body: body,
+                theme: 'striped',
+                headStyles: { fillColor: [0, 86, 179] }
+            });
+
+            const finalY = (doc.lastAutoTable?.finalY) || 100;
+            doc.setFont("helvetica", "bold");
+            doc.text(`Total Paid: INR ${order.amount}`, 14, finalY + 10);
+            
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8);
+            doc.text("This is an electronically generated document. No signature is required.", 105, finalY + 20, { align: "center" });
+
+            doc.save(`Order_${order.orderId}.pdf`);
+            toast.success("Order history downloaded!");
+        } catch (error) {
+            console.error("PDF generation error:", error);
+            toast.error("Failed to generate PDF");
+        }
+    };
+
+    if (loading && dashboardData.enrolledCourses.length === 0) {
         return (
-            <div className="text-center py-5">
-                <div className="spinner-border" role="status">
-                    <span className="visually-hidden">Loading...</span>
+            <div className="container py-5">
+                <div className="text-center py-5">
+                    <div className="spinner-border text-primary" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                    <h4 className="mt-3">Loading Your Dashboard...</h4>
                 </div>
             </div>
         );
@@ -376,6 +521,7 @@ function MyDashboard() {
                                                 data-bs-toggle="tab"
                                                 href="#home"
                                                 role="tab"
+                                                onClick={() => setActiveTab('home')}
                                             >
                                                 Dashboard
                                             </a>
@@ -388,6 +534,7 @@ function MyDashboard() {
                                                 data-bs-toggle="tab"
                                                 href="#profile"
                                                 role="tab"
+                                                onClick={() => setActiveTab('all')}
                                             >
                                                 All Courses
                                             </a>
@@ -438,7 +585,7 @@ function MyDashboard() {
                                                         </div>
 
                                                         <div className="udemy-enroll-content">
-                                                            <p>Enrolled Course</p>
+                                                            <p>Enrolled Courses</p>
                                                             <h5>{dashboardData.stats.totalEnrolled}</h5>
                                                         </div>
                                                     </div>
@@ -452,7 +599,7 @@ function MyDashboard() {
                                                         </div>
 
                                                         <div className="udemy-enroll-content">
-                                                            <p>Active Course</p>
+                                                            <p>Active Courses</p>
                                                             <h5>{dashboardData.stats.totalActive}</h5>
                                                         </div>
                                                     </div>
@@ -466,7 +613,7 @@ function MyDashboard() {
                                                         </div>
 
                                                         <div className="udemy-enroll-content">
-                                                            <p>Complete Course</p>
+                                                            <p>Complete Courses</p>
                                                             <h5>{dashboardData.stats.totalCompleted}</h5>
                                                         </div>
                                                     </div>
@@ -487,51 +634,13 @@ function MyDashboard() {
                                                 </div>
                                             </div>
 
-                                            <h3 className="subtitle text-black fw-600">Recent Enrolled Course</h3>
+                                            <h3 className="subtitle text-black fw-600">Recent Enrolled Courses</h3>
 
                                             <div className="row">
                                                 {dashboardData.enrolledCourses.length > 0 ? (
                                                     dashboardData.enrolledCourses.map((course) => (
                                                         <div key={course._id} className="col-lg-4 col-md-6 col-sm-12 mb-3">
-                                                            <div 
-                                                              className="udemy-cards"
-                                                              style={{ cursor: "pointer" }}
-                                                              onClick={() => navigate(`/course/${course._id}`)}
-                                                            >
-                                                                <div className="udemy-picture">
-                                                                  <img src={course.courseImage || course.thumbnail || course.image || "/course_01.png"} alt={course.title} />
-                                                                </div>
-                                                                <div className="udemy-content">
-                                                                    <h4>{course.title}</h4>
-                                                                    <span className="pb-2">
-                                                                        <FontAwesomeIcon icon={faUser} className="udemy-course-icon" />
-                                                                        <a href="#" className="udemy-user">{typeof course.instructor === 'object' ? (course.instructor?.name || course.instructor?.username || "Instructor") : (course.instructor || "Instructor")}</a>
-                                                                    </span>
-                                                                    <p>{course.description}</p>
-                                                                    <ul className="rating-list">
-                                                                        {renderStars(course.rating || 0)}
-                                                                        <li className="rating-item"><span className="rating-number">({course.reviewsCount || course.totalRatings || 0})</span></li>
-                                                                    </ul>
-
-                                                                    <div className="progress-wrapper mt-1">
-                                                                        <div className="progress-item">
-                                                                            <div className="d-flex align-items-center justify-content-between udemy-progress">
-                                                                                <span className="udemy-complete-video">
-                                                                                    {course.status === 'completed' ? 'Completed' : `(${course.completedVideos || 0}/${course.totalVideos || 0})Video Completed`}
-                                                                                </span>
-                                                                                <span className="complete-label fz-12 fw-500">{course.progress || 0}%</span>
-                                                                            </div>
-
-                                                                            <div className="progress custom-progress">
-                                                                                <div
-                                                                                    className={course.status === 'completed' ? 'complete-bar' : 'progress-bar'}
-                                                                                    style={{ width: `${course.progress || 0}%` }}
-                                                                                ></div>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
+                                                            <CourseCard course={course} variant="my-course" isVertical={true} />
                                                         </div>
                                                     ))
                                                 ) : (
@@ -542,9 +651,9 @@ function MyDashboard() {
                                                             </div>
                                                             <h4 className="text-muted">No Enrolled Courses Yet</h4>
                                                             <p className="text-muted">Start learning by enrolling in your first course!</p>
-                                                            <button 
+                                                            <button
                                                                 className="btn btn-primary"
-                                                                onClick={() => window.location.href = '/courses'}
+                                                                onClick={() => window.location.href = '/available-courses'}
                                                             >
                                                                 Browse Courses
                                                             </button>
@@ -579,9 +688,9 @@ function MyDashboard() {
                                                                                 <td>
                                                                                     <div className="admin-table-bx">
                                                                                         <div className="admin-table-sub-bx">
-                                                                                            <img src={order.courseId?.courseImage || order.courseId?.thumbnail || order.courseId?.image || "/pic_01.jpg"} alt={order.courseId?.title} />
+                                                                                            <img src={normalizeMediaUrl(order.courseId?.courseImage || order.courseId?.thumbnail || order.courseId?.image)} alt={getLangText(order.courseId?.title, userLanguage)} />
                                                                                             <div className="admin-table-sub-details doctor-title">
-                                                                                                <h6>{order.courseId?.title}</h6>
+                                                                                                <h6>{getLangText(order.courseId?.title, userLanguage)}</h6>
                                                                                             </div>
                                                                                         </div>
                                                                                     </div>
@@ -592,15 +701,15 @@ function MyDashboard() {
                                                                                 </td>
                                                                                 <td>
                                                                                     <span className={order.paymentStatus === 'completed' ? 'public-title' : 'pending-title'}>
-                                                                                         {order.paymentStatus === 'completed' ? 'Paid' : 'Pending'}
-                                                                                     </span>
+                                                                                        {order.paymentStatus === 'completed' ? 'Paid' : 'Pending'}
+                                                                                    </span>
                                                                                 </td>
                                                                                 <td>
                                                                                     <div className="d-flex gap-2">
                                                                                         <button type="button" className="dw-btn" onClick={() => handleViewOrder(order)} title="View Order">
                                                                                             <FontAwesomeIcon icon={faEye} />
                                                                                         </button>
-                                                                                        <button type="button" className="dw-btn" onClick={() => handleViewOrder(order)} title="Download Receipt">
+                                                                                        <button type="button" className="dw-btn" onClick={() => handleDownloadOrder(order)} title="Download Receipt">
                                                                                             <FontAwesomeIcon icon={faDownload} />
                                                                                         </button>
                                                                                     </div>
@@ -631,33 +740,38 @@ function MyDashboard() {
                                         <div className="mb-3 text-end">
                                             <div className="dropdown">
                                                 <a
-                                                    href="#"
+                                                    href="javascript:void(0)"
                                                     className="vertical-btn dropdown-toggle"
                                                     id="acticonMenu2"
                                                     data-bs-toggle="dropdown"
                                                     aria-expanded="false"
                                                 >
-                                                    All Status
+                                                    {courseStatus === "All" ? "All Status" : courseStatus}
                                                 </a>
                                                 <ul
                                                     className="dropdown-menu dropdown-menu-end  tble-action-menu admin-dropdown-card"
                                                     aria-labelledby="acticonMenu2"
                                                 >
                                                     <li className="prescription-item">
-                                                        <a href="#" className="prescription-nav" >
+                                                        <a href="javascript:void(0)" className="prescription-nav" onClick={() => setCourseStatus("All")}>
+                                                            All Status
+                                                        </a>
+                                                    </li>
+                                                    <li className="prescription-item">
+                                                        <a href="javascript:void(0)" className="prescription-nav" onClick={() => setCourseStatus("Not Started")}>
                                                             Not Started
                                                         </a>
                                                     </li>
 
                                                     <li className="prescription-item">
-                                                        <a href="#" className="prescription-nav">
-                                                            Complete
+                                                        <a href="javascript:void(0)" className="prescription-nav" onClick={() => setCourseStatus("In Progress")}>
+                                                            In Progress
                                                         </a>
                                                     </li>
 
                                                     <li className="prescription-item">
-                                                        <a href="#" className="prescription-nav" >
-                                                            Pending
+                                                        <a href="javascript:void(0)" className="prescription-nav" onClick={() => setCourseStatus("Complete")}>
+                                                            Complete
                                                         </a>
                                                     </li>
                                                 </ul>
@@ -669,27 +783,7 @@ function MyDashboard() {
                                                 {paginatedCourses.length > 0 ? (
                                                     paginatedCourses.map((course) => (
                                                         <div key={course._id} className="col-lg-4 col-md-6 col-sm-12 mb-3">
-                                                            <div 
-                                                              className="udemy-cards"
-                                                              style={{ cursor: "pointer" }}
-                                                              onClick={() => navigate(`/course/${course._id}`)}
-                                                            >
-                                                                <div className="udemy-picture">
-                                                                   <img src={course.courseImage || course.thumbnail || course.image || "/course_01.png"} alt={course.title} />
-                                                                </div>
-                                                                <div className="udemy-content">
-                                                                    <h4>{course.title}</h4>
-                                                                    <span className="pb-2">
-                                                                        <FontAwesomeIcon icon={faUser} className="udemy-course-icon" />
-                                                                        <a href="#" className="udemy-user">{typeof course.instructor === 'object' ? (course.instructor?.name || course.instructor?.username || "Instructor") : (course.instructor || "Instructor")}</a>
-                                                                    </span>
-                                                                    <p className="line-clamp-2">{course.description}</p>
-                                                                    <ul className="rating-list">
-                                                                        {renderStars(course.rating || 0)}
-                                                                        <li className="rating-item"><span className="rating-number">({course.reviewsCount || course.totalRatings || 0})</span></li>
-                                                                    </ul>
-                                                                </div>
-                                                            </div>
+                                                            <CourseCard course={course} variant="my-course" isVertical={true} />
                                                         </div>
                                                     ))
                                                 ) : (
@@ -776,7 +870,7 @@ function MyDashboard() {
                                                                                     <div className="admin-table-bx">
                                                                                         <div className="admin-table-sub-bx">
                                                                                             <div className="admin-table-sub-details doctor-title ps-0">
-                                                                                                <h6>{certificate.courseTitle}</h6>
+                                                                                                <h6>{getLangText(certificate.courseTitle, userLanguage)}</h6>
                                                                                             </div>
                                                                                         </div>
                                                                                     </div>
@@ -847,37 +941,37 @@ function MyDashboard() {
                                                                 <tbody>
                                                                     {paginatedOrders.length > 0 ? (
                                                                         paginatedOrders.map((order, index) => (
-                                                                          <tr key={order._id}>
-                                                                            <td>{String((currentOrderPage - 1) * itemsPerPage + index + 1).padStart(2, '0')}.</td>
-                                                                            <td>{order.orderId}</td>
-                                                                            <td>
-                                                                                <div className="admin-table-bx">
-                                                                                    <div className="admin-table-sub-bx">
-                                                                                        <img src={order.courseId?.courseImage || order.courseId?.thumbnail || order.courseId?.image || "/pic_01.jpg"} alt={order.courseId?.title} />
-                                                                                        <div className="admin-table-sub-details doctor-title">
-                                                                                            <h6>{order.courseId?.title}</h6>
+                                                                            <tr key={order._id}>
+                                                                                <td>{String((currentOrderPage - 1) * itemsPerPage + index + 1).padStart(2, '0')}.</td>
+                                                                                <td>{order.orderId}</td>
+                                                                                <td>
+                                                                                    <div className="admin-table-bx">
+                                                                                        <div className="admin-table-sub-bx">
+                                                                                            <img src={normalizeMediaUrl(order.courseId?.courseImage || order.courseId?.thumbnail || order.courseId?.image)} alt={getLangText(order.courseId?.title, userLanguage)} />
+                                                                                            <div className="admin-table-sub-details doctor-title">
+                                                                                                <h6>{getLangText(order.courseId?.title, userLanguage)}</h6>
+                                                                                            </div>
                                                                                         </div>
                                                                                     </div>
-                                                                                </div>
-                                                                            </td>
-                                                                            <td>₹{order.amount}</td>
-                                                                            <td>{order.paymentMethod === 'bank_transfer' || order.paymentMethod === 'Bank Transfer' ? 'Bank Transfer' : (order.paymentMethod === 'upi' || order.paymentMethod === 'UPI' ? 'UPI' : 'UPI')}</td>
-                                                                            <td>
-                                                                                <span className={order.paymentStatus === 'completed' ? 'public-title' : 'pending-title'}>
-                                                                                                                                                                     {order.paymentStatus === 'completed' ? 'Paid' : 'Pending'}
-                                                                                                                                                                 </span>
-                                                                            </td>
-                                                                            <td>
-                                                                                <div className="d-flex gap-2">
-                                                                                    <button type="button" className="dw-btn" onClick={() => handleViewOrder(order)} title="View Order">
-                                                                                        <FontAwesomeIcon icon={faEye} />
-                                                                                    </button>
-                                                                                    <button type="button" className="dw-btn" onClick={() => handleViewOrder(order)} title="Download Receipt">
-                                                                                        <FontAwesomeIcon icon={faDownload} />
-                                                                                    </button>
-                                                                                </div>
-                                                                            </td>
-                                                                          </tr>
+                                                                                </td>
+                                                                                <td>₹{order.amount}</td>
+                                                                                <td>{order.paymentMethod === 'bank_transfer' || order.paymentMethod === 'Bank Transfer' ? 'Bank Transfer' : (order.paymentMethod === 'upi' || order.paymentMethod === 'UPI' ? 'UPI' : 'UPI')}</td>
+                                                                                <td>
+                                                                                    <span className={order.paymentStatus === 'completed' ? 'public-title' : 'pending-title'}>
+                                                                                        {order.paymentStatus === 'completed' ? 'Paid' : 'Pending'}
+                                                                                    </span>
+                                                                                </td>
+                                                                                <td>
+                                                                                    <div className="d-flex gap-2">
+                                                                                        <button type="button" className="dw-btn" onClick={() => handleViewOrder(order)} title="View Order">
+                                                                                            <FontAwesomeIcon icon={faEye} />
+                                                                                        </button>
+                                                                                        <button type="button" className="dw-btn" onClick={() => handleDownloadOrder(order)} title="Download Receipt">
+                                                                                            <FontAwesomeIcon icon={faDownload} />
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </td>
+                                                                            </tr>
                                                                         ))
                                                                     ) : (
                                                                         <tr>
@@ -949,7 +1043,7 @@ function MyDashboard() {
                                                 <p className="mb-2">This is to certify that</p>
                                                 <h2 className="mb-4 text-primary font-weight-bold">{viewingCertificate.studentName}</h2>
                                                 <p className="mb-2">has successfully completed the course</p>
-                                                <h3 className="mb-4">{viewingCertificate.courseTitle}</h3>
+                                                <h3 className="mb-4">{getLangText(viewingCertificate.courseTitle, userLanguage)}</h3>
                                                 <p className="mb-4">Issued on: {new Date(viewingCertificate.issuedAt).toLocaleDateString()}</p>
                                                 <div className="mt-4 pt-4 border-top">
                                                     <p className="mb-0">Certificate ID: <strong>{viewingCertificate.certificateId}</strong></p>
@@ -981,10 +1075,10 @@ function MyDashboard() {
             {showCertificateModal && <div className="modal-backdrop fade show"></div>}
 
             {/* Order Details Modal */}
-            <div className={`modal step-modal fade ${showOrderModal ? 'show d-block' : ''}`} 
-                 style={{ display: showOrderModal ? 'block' : 'none' }} 
-                 id="view-Order" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
-                 aria-labelledby="orderModalLabel" aria-hidden={!showOrderModal}>
+            <div className={`modal step-modal fade ${showOrderModal ? 'show d-block' : ''}`}
+                style={{ display: showOrderModal ? 'block' : 'none' }}
+                id="view-Order" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1"
+                aria-labelledby="orderModalLabel" aria-hidden={!showOrderModal}>
                 <div className="modal-dialog modal-dialog-centered modal-lg">
                     <div className="modal-content custom-modal-box">
                         <div className="text-end">
@@ -1010,20 +1104,20 @@ function MyDashboard() {
                                             <h6 className="fw-bold">{new Date(viewingOrder.createdAt).toLocaleDateString()}</h6>
                                         </div>
                                     </div>
-                                    
+
                                     <div className="bg-light p-3 rounded mb-4">
                                         <div className="row align-items-center">
                                             <div className="col-3 col-md-2">
-                                                <img 
-                                                    src={viewingOrder.courseId?.courseImage || viewingOrder.courseId?.thumbnail || "/pic_01.jpg"} 
-                                                    alt={viewingOrder.courseId?.title} 
+                                                <img
+                                                    src={normalizeMediaUrl(viewingOrder.courseId?.courseImage || viewingOrder.courseId?.thumbnail)}
+                                                    alt={getLangText(viewingOrder.courseId?.title, userLanguage)}
                                                     className="img-fluid rounded"
                                                     style={{ maxHeight: '60px', objectFit: 'cover' }}
                                                 />
                                             </div>
                                             <div className="col-9 col-md-10">
                                                 <p className="mb-0 text-muted small">Purchased Course</p>
-                                                <h6 className="fw-bold mb-0">{viewingOrder.courseId?.title}</h6>
+                                                <h6 className="fw-bold mb-0">{getLangText(viewingOrder.courseId?.title, userLanguage)}</h6>
                                             </div>
                                         </div>
                                     </div>

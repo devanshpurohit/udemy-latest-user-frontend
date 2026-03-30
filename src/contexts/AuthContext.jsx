@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { isLoggedIn, getStoredUser, logout } from '../services/authService';
+import { clearCache } from '../services/apiService';
 
 const AuthContext = createContext();
 
@@ -18,16 +19,27 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         // Check authentication status on app load
-        const checkAuth = () => {
+        const checkAuth = async () => {
             const loggedIn = isLoggedIn();
             const userData = getStoredUser();
             
             console.log('🔍 AuthContext - Checking auth:', { loggedIn, userData });
-            console.log('🔍 AuthContext - Raw localStorage user:', localStorage.getItem('user'));
-            console.log('🔍 AuthContext - Raw localStorage token:', localStorage.getItem('token'));
             
-            setIsAuthenticated(loggedIn);
-            setUser(userData);
+            if (loggedIn) {
+                const { verifyToken } = await import('../services/authService');
+                const verifyRes = await verifyToken();
+                if (verifyRes.success) {
+                    setIsAuthenticated(true);
+                    setUser(verifyRes.user || userData);
+                } else {
+                    console.warn('🔍 AuthContext - Token verification failed, logging out...');
+                    setIsAuthenticated(false);
+                    setUser(null);
+                }
+            } else {
+                setIsAuthenticated(false);
+                setUser(null);
+            }
             setLoading(false);
         };
 
@@ -51,6 +63,8 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = (userData) => {
+        // Clear old public/cached data so new authenticated data is fetched
+        clearCache();
         setIsAuthenticated(true);
         setUser(userData);
     };

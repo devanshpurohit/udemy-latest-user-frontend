@@ -5,6 +5,7 @@ import { getToken } from "../../services/authService";
 import { useAuth } from "../../contexts/AuthContext";
 import { FaPlay } from "react-icons/fa";
 import { toast } from "react-toastify";
+import { getCourseById, getCachedCourseById, getCourseReviews, getDashboardData, syncCartWithPurchases } from "../../services/apiService";
 
 import { MdWork } from "react-icons/md";
 import { FaClock } from "react-icons/fa6";
@@ -19,11 +20,12 @@ import { BsTelegram } from "react-icons/bs";
 import { MdDesktopWindows } from "react-icons/md";
 import { IoMdVideocam } from "react-icons/io";
 import { PiCardsThreeFill } from "react-icons/pi";
-import { faClose, faLock, faVideo, faClock } from "@fortawesome/free-solid-svg-icons";
+import { faClose, faVideo, faClock, faDownload } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { MdSort } from "react-icons/md";
 import { IoIosStar, IoIosStarOutline } from "react-icons/io";
 import { MdRateReview } from "react-icons/md";
+import { getLangText } from "../../utils/languageUtils";
 // 🎥 Check if video is YouTube
 const isYouTube = (url) => {
     if (!url) return false;
@@ -45,6 +47,20 @@ const getYouTubeEmbed = (url) => {
     return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
 };
 
+const normalizeMediaUrl = (url) => {
+    if (!url) return "/course_banner.png";
+    if (url.startsWith('http') || url.startsWith('data:')) return url;
+    let cleanPath = url.replace(/\\/g, '/');
+    if (cleanPath.includes('/uploads/')) {
+        cleanPath = '/uploads/' + cleanPath.split('/uploads/').pop();
+    }
+    if (!cleanPath.startsWith('/')) {
+        cleanPath = '/' + cleanPath;
+    }
+    const baseUrl = config.API_BASE_URL.replace('/api', '');
+    return encodeURI(`${baseUrl}${cleanPath}`.replace(/\/+/g, '/').replace(':/', '://'));
+};
+
 function CourseDetailsContent({ course: propCourse }) {
     const { id } = useParams();
     const location = useLocation();
@@ -56,18 +72,36 @@ function CourseDetailsContent({ course: propCourse }) {
     const [expandedSections, setExpandedSections] = useState({});
     const [currentLesson, setCurrentLesson] = useState(null);
     const [currentQuiz, setCurrentQuiz] = useState(null);
-    const [course, setCourse] = useState(location.state?.course || null);
-    const [loading, setLoading] = useState(!location.state?.course);
+    const [course, setCourse] = useState(() => {
+        if (propCourse) return propCourse;
+        if (location.state?.course) return location.state.course;
+        if (id) {
+            const cached = getCachedCourseById(id);
+            if (cached && cached.success) return cached.data.data || cached.data;
+        }
+        return null;
+    });
+
+    const [loading, setLoading] = useState(() => {
+        if (propCourse || location.state?.course) return false;
+        if (id) {
+            const cached = getCachedCourseById(id);
+            if (cached && cached.success) return false;
+        }
+        return true;
+    });
     const [reviews, setReviews] = useState([]);
+    const [courseFAQs, setCourseFAQs] = useState([]);
+    const [faqLoading, setFaqLoading] = useState(false);
     const [reviewText, setReviewText] = useState("")
     const [rating, setRating] = useState(5)
     const [showAllReviews, setShowAllReviews] = useState(false);
+    const [sortReviewBy, setSortReviewBy] = useState('newest');
     const INITIAL_REVIEWS_COUNT = 3;
+    const [activeFaq, setActiveFaq] = useState(null);
 
-    // 🎯 Check if user has purchased this course
-    const [isPurchased, setIsPurchased] = useState(false);
-    // start in-checking to avoid running redirect before purchase logic kicks off
-    const [isCheckingPurchase, setIsCheckingPurchase] = useState(true);
+    // 🎯 Check if user has purchased this course (Always true here since CourseGuard prevents non-purchased users from seeing this)
+    const isPurchased = true;
 
     // 🎯 Check if we're in learning mode
     const isLearnMode = location.pathname.includes('/learn');
@@ -79,6 +113,7 @@ function CourseDetailsContent({ course: propCourse }) {
     // 🎯 Auth Context
     const { user } = useAuth();
     const isLoggedIn = !!user;
+    const userLanguage = user?.profile?.language || 'English';
 
     // 🎯 Check if user is enrolled in this course
     const isEnrolled = course?.enrolledStudents?.some(
@@ -95,9 +130,24 @@ function CourseDetailsContent({ course: propCourse }) {
 
             course.resources.forEach(resource => {
                 const link = document.createElement('a');
-                link.href = resource.url.startsWith('data:') || resource.url.startsWith('http') 
-                    ? resource.url 
-                    : `${config.API_BASE_URL.replace('/api', '')}${resource.url}`;
+                let fullUrl = resource.url;
+                if (!resource.url.startsWith('data:') && !resource.url.startsWith('http')) {
+                    // Normalize path: replace backslashes, extract only the part after 'uploads' or root
+                    let cleanPath = resource.url.replace(/\\/g, '/');
+                    
+                    if (cleanPath.includes('/uploads/')) {
+                        cleanPath = '/uploads/' + cleanPath.split('/uploads/').pop();
+                    }
+                    
+                    if (!cleanPath.startsWith('/')) {
+                        cleanPath = '/' + cleanPath;
+                    }
+
+                    const baseUrl = config.API_BASE_URL.replace('/api', '');
+                    fullUrl = `${baseUrl}${cleanPath}`.replace(/\/+/g, '/').replace(':/', '://');
+                    fullUrl = encodeURI(fullUrl);
+                }
+                link.href = fullUrl;
                 link.download = resource.name || 'resource';
                 document.body.appendChild(link);
                 link.click();
@@ -116,6 +166,28 @@ function CourseDetailsContent({ course: propCourse }) {
         setCurrentLesson(null);
         setShowVideo(false);
     };
+
+    // 🎯 Fetch Course FAQs
+    useEffect(() => {
+        const fetchCourseFAQs = async () => {
+            if (!course?._id) return;
+            try {
+                setFaqLoading(true);
+                const response = await fetch(`${config.API_BASE_URL}/questions/course/${course._id}`);
+                const data = await response.json();
+                if (data.success) {
+                    setCourseFAQs(data.data);
+                }
+            } catch (error) {
+                console.error("❌ Fetch Course FAQs Error:", error);
+            } finally {
+                setFaqLoading(false);
+            }
+        };
+
+        fetchCourseFAQs();
+    }, [course?._id]);
+
     const submitReview = async (e) => {
         if(e) e.preventDefault();
 
@@ -132,13 +204,10 @@ function CourseDetailsContent({ course: propCourse }) {
             const data = await res.json();
 
             if (data.success) {
-                toast.success("Review submitted!");
+                toast.success("Review submitted! It will be visible after admin approval.");
                 setReviewText("");
                 setRating(5);
-                setReviews(prev => [data.data, ...prev]);
-                // Switch to review tab so user sees their review
-                const reviewTab = document.getElementById("review-tab");
-                if (reviewTab) reviewTab.click();
+                // We don't add it to the local state yet because it needs approval to be seen
             } else {
                 toast.error(data.message || "Failed to submit review");
             }
@@ -212,17 +281,15 @@ function CourseDetailsContent({ course: propCourse }) {
     useEffect(() => {
 
         const fetchReviews = async () => {
-
-            const res = await fetch(`${config.API_BASE_URL}/reviews/${course._id}`, {
-                mode: 'cors'
-            });
-
-            const data = await res.json();
-
-            if (data.success) {
-                setReviews(data.data);
+            if (!course?._id) return;
+            try {
+                const res = await getCourseReviews(course._id, false);
+                if (res.success) {
+                    setReviews(res.data);
+                }
+            } catch (err) {
+                console.log("Error fetching reviews:", err);
             }
-
         };
 
         if (course?._id) {
@@ -245,35 +312,19 @@ function CourseDetailsContent({ course: propCourse }) {
         // Otherwise fetch from API
         const fetchCourseData = async () => {
             try {
-
-                setLoading(true);
-                console.log('🔍 CourseDetailsContent: Fetching course data for ID:', id);
-
-                const token = localStorage.getItem('token');
-                const headers = {
-                    'Content-Type': 'application/json'
-                };
-
-                if (token) {
-                    headers['Authorization'] = `Bearer ${token}`;
+                if (!course) {
+                    setLoading(true);
                 }
+                console.log('🔍 CourseDetailsContent: Fetching course data via apiService:', id);
 
+                const response = await getCourseById(id, false); // Bypass cache for learn page
 
-                const response = await fetch(`${config.API_BASE_URL}/public/courses/${id}`, {
-                    headers: headers,
-                    cache: "no-store"
-                });
-
-
-                const data = await response.json();
-                console.log('🔍 CourseDetailsContent: API Response:', data);
-                console.log("Latest course data:", data.data);
-
-                if (data.success) {
-                    setCourse(data.data);
-                    console.log('✅ CourseDetailsContent: Course data loaded successfully');
+                if (response.success && response.data) {
+                    const courseData = response.data.data || response.data;
+                    setCourse(courseData);
+                    console.log('✅ CourseDetailsContent: Course data loaded successfully', response.fromCache ? '(from cache)' : '');
                 } else {
-                    console.error('❌ CourseDetailsContent: API Error:', data.message);
+                    console.error('❌ CourseDetailsContent: Error:', response.error);
                     setCourse(null);
                 }
             } catch (error) {
@@ -289,86 +340,8 @@ function CourseDetailsContent({ course: propCourse }) {
         }
     }, [id, propCourse]);
 
-    // 🎯 Check purchase status after course is loaded
-    useEffect(() => {
-        // do nothing until we have a loaded course with an id
-        if (!course || !course._id) return;
+    // 🎯 Access control for learn mode - redirect if not purchased is handled by CourseGuard now!
 
-        const checkPurchaseStatus = async () => {
-            setIsCheckingPurchase(true);
-
-            try {
-                const token = localStorage.getItem("token");
-                if (!token) {
-                    setIsPurchased(false);
-                    setIsCheckingPurchase(false);
-                    return;
-                }
-
-                // Check cache first for purchase status
-                const purchaseCacheKey = `purchase_${course._id}`;
-                const cachedPurchaseStatus = sessionStorage.getItem(purchaseCacheKey);
-
-                if (cachedPurchaseStatus !== null) {
-                    setIsPurchased(JSON.parse(cachedPurchaseStatus));
-                    setIsCheckingPurchase(false);
-                    return;
-                }
-
-                // Only fetch dashboard if not cached
-                const res = await fetch(
-                    `${config.API_BASE_URL}/users/dashboard`,
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
-                    }
-                );
-
-                const data = await res.json();
-
-                if (data.success && data.orders) {
-                    const orders = data.orders;
-
-                    const purchased = orders.some(
-                        order => {
-                            const orderCourseId = order.courseId?._id || order.courseId;
-                            const currentCourseId = course?._id || course?.id || course?._id;
-                            return orderCourseId.toString() === currentCourseId.toString();
-                        }
-                    );
-
-                    setIsPurchased(purchased);
-                    // Cache the result
-                    sessionStorage.setItem(purchaseCacheKey, JSON.stringify(purchased));
-                } else {
-                    setIsPurchased(false);
-                    sessionStorage.setItem(purchaseCacheKey, JSON.stringify(false));
-                }
-            } catch (error) {
-                console.log('Error checking purchase status:', error);
-                setIsPurchased(false);
-            } finally {
-                setIsCheckingPurchase(false);
-            }
-        };
-
-        checkPurchaseStatus();
-    }, [course?._id]);
-
-    // 🎯 Access control for learn mode - redirect if not purchased
-    useEffect(() => {
-
-        // wait until purchase check finished
-        if (!course || isCheckingPurchase) return;
-
-        if (isLearnMode && !isPurchased) {
-            console.log("❌ User trying to access learn mode without purchase - redirecting");
-
-            navigate(`/course/${course._id}`, { replace: true });
-        }
-
-    }, [isLearnMode, isPurchased, isCheckingPurchase, course]);
     // 🎯 Handle location state for lesson navigation (only after course is loaded)
     useEffect(() => {
         if (!course || !location.state?.lessonId) return;
@@ -403,6 +376,8 @@ function CourseDetailsContent({ course: propCourse }) {
     };
 
     const getTotalLessonsCount = () => {
+        if (course?.totalLessonsCount > 0) return course.totalLessonsCount;
+        if (course?.totalLessons > 0) return course.totalLessons;
         return getAllLessons().length;
     };
 
@@ -418,11 +393,60 @@ function CourseDetailsContent({ course: propCourse }) {
     // 🎯 Progress tracking functions
     const loadProgress = () => {
         if (!user || !course?._id) return;
+        
         const progressKey = `progress_${user._id}_${course._id}`;
         const savedProgress = localStorage.getItem(progressKey);
+        let localCompletedIds = [];
+        
         if (savedProgress) {
-            const completedLessonIds = JSON.parse(savedProgress);
-            setCompletedLessons(new Set(completedLessonIds));
+            try {
+                localCompletedIds = JSON.parse(savedProgress).map(id => String(id));
+            } catch (e) {
+                console.error("Error parsing local progress:", e);
+            }
+        }
+
+        // Merge with backend progress if available
+        // The public API now returns completedLessons for enrolled users
+        const backendCompletedIds = (course.completedLessons || []).map(l => 
+            typeof l === 'object' ? (l.lessonId || l._id || l.lesson) : l
+        ).filter(Boolean).map(id => String(id));
+
+        const mergedIds = new Set([...localCompletedIds, ...backendCompletedIds]);
+        
+        setCompletedLessons(mergedIds);
+        
+        // Save merged progress back to localStorage
+        localStorage.setItem(progressKey, JSON.stringify(Array.from(mergedIds)));
+        
+        // If we have local IDs that aren't on the backend, sync them
+        const localOnlyIds = localCompletedIds.filter(id => !backendCompletedIds.includes(id));
+        if (localOnlyIds.length > 0) {
+            syncLocalToBackend(localOnlyIds);
+        }
+    };
+
+    const syncLocalToBackend = async (lessonIds) => {
+        const token = localStorage.getItem('token');
+        if (!token || !user?._id || !course?._id) return;
+
+        console.log(`🔄 Syncing ${lessonIds.length} local-only lessons to backend...`);
+        
+        // We call the existing single-lesson sync for each lesson
+        // A bulk endpoint would be better, but this works with existing API
+        for (const lessonId of lessonIds) {
+            try {
+                await fetch(`${config.API_BASE_URL}/students/${user._id}/courses/${course._id}/progress`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ lessonId })
+                });
+            } catch (err) {
+                console.error(`Failed to sync lesson ${lessonId}:`, err);
+            }
         }
     };
 
@@ -433,10 +457,13 @@ function CourseDetailsContent({ course: propCourse }) {
     };
 
     const markLessonCompleted = async (lessonId) => {
+        if (!lessonId) return;
+        const idStr = String(lessonId);
+
         // Local update
         setCompletedLessons(prev => {
             const newCompleted = new Set(prev);
-            newCompleted.add(lessonId);
+            newCompleted.add(idStr);
             saveProgress(newCompleted);
             return newCompleted;
         });
@@ -452,9 +479,7 @@ function CourseDetailsContent({ course: propCourse }) {
                         'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify({
-                        lessonId: lessonId,
-                        // Progress calculation is handled by the backend controller usually,
-                        // but we can also calculate a percentage here if the API requires it.
+                        lessonId: idStr,
                     })
                 });
                 const result = await response.json();
@@ -469,6 +494,7 @@ function CourseDetailsContent({ course: propCourse }) {
             openReviewModal();
         }, 500);
     };
+
     const openReviewModal = () => {
         const modalElement = document.getElementById("review-Add");
 
@@ -487,10 +513,11 @@ function CourseDetailsContent({ course: propCourse }) {
 
     // Load progress when course and user are available
     useEffect(() => {
-        if (course && user && isLearnMode) {
+        if (course && user) {
+            console.log("🔄 CourseDetailsContent: Triggering loadProgress...");
             loadProgress();
         }
-    }, [course, user, isLearnMode]);
+    }, [course, user]); // Use objects to ensure it triggers on fresh fetch
 
     // Update progress when completed lessons change
     useEffect(() => {
@@ -499,7 +526,7 @@ function CourseDetailsContent({ course: propCourse }) {
     }, [completedLessons, course]);
 
     // 🎯 Early returns for loading and error states (must come after all hooks)
-    if (loading) {
+    if (loading && !course) {
         return (
             <div className="container py-5">
                 <div className="text-center">
@@ -523,20 +550,14 @@ function CourseDetailsContent({ course: propCourse }) {
         return allLessons.length > 0 ? allLessons[0] : null;
     };
 
-    // Handle lesson click with progress tracking
     const handleLessonClick = (lesson) => {
         if (!isPurchased && user?.role !== 'admin') {
-            toast.info("first buy the course to access video");
+            toast.info("First buy the course to access the video.");
             return;
         }
-        setCurrentLesson(lesson);
-        setCurrentQuiz(null);
-        setShowVideo(true);
-
-        // Mark lesson as completed when clicked (simplified - in real app, mark when video ends)
-        if (lesson._id && !completedLessons.has(lesson._id)) {
-            markLessonCompleted(lesson._id);
-        }
+        
+        // Navigate to the dynamic video player page
+        navigate(`/video-player/${course._id}`, { state: { lessonId: lesson._id } });
     };
 
     // Add to wishlist function
@@ -582,7 +603,7 @@ function CourseDetailsContent({ course: propCourse }) {
                         <div className="col-lg-12">
                             <div className="d-flex align-items-center justify-content-center">
                                 <div>
-                                    <h3 className="lg_title text-center mb-2">Course</h3>
+                                    <h3 className="lg_title text-center mb-2">Courses</h3>
                                     <div className="admin-breadcrumb">
                                         <nav aria-label="breadcrumb">
                                             <ol className="breadcrumb custom-breadcrumb">
@@ -593,8 +614,8 @@ function CourseDetailsContent({ course: propCourse }) {
                                                 </li>
 
                                                 <li className="breadcrumb-item">
-                                                    <a href="/my-course" className="breadcrumb-link">
-                                                        Course
+                                                    <a href="/available-courses" className="breadcrumb-link">
+                                                        Courses
                                                     </a>
                                                 </li>
 
@@ -631,10 +652,10 @@ function CourseDetailsContent({ course: propCourse }) {
                                                 className="thumbnail-container"
                                                 onClick={() => {
                                                     if (!isPurchased && user?.role !== 'admin') {
-                                                        toast.info("first buy the course to access video");
+                                                        toast.info("First buy the course to access the video.");
                                                         return;
                                                     }
-                                                    setShowVideo(true);
+                                                    navigate(`/video-player/${course._id}`);
                                                 }}
                                                 style={{
                                                     position: "relative",
@@ -642,7 +663,7 @@ function CourseDetailsContent({ course: propCourse }) {
                                                 }}
                                             >
                                                 <img
-                                                    src={course.thumbnail || course.courseImage || "/course_banner.png"}
+                                                    src={normalizeMediaUrl(course?.thumbnail || course?.courseImage)}
                                                     alt="Course Thumbnail"
                                                     className="thumbnail-img"
                                                     style={{
@@ -742,13 +763,11 @@ function CourseDetailsContent({ course: propCourse }) {
                                                                     style={{ borderRadius: "12px" }}
                                                                 >
                                                                     <source
-                                                                        src={
-                                                                            lessonVideo.startsWith("http")
-                                                                                ? lessonVideo
-                                                                                : `${import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'https://udemy-latest-backend-1.onrender.com'}${lessonVideo}`
-                                                                        }
-                                                                        type="video/mp4"
-                                                                    />
+                                                                    src={currentLesson.videoUrl.startsWith('http')
+                                                                        ? currentLesson.videoUrl
+                                                                        : `${config.API_BASE_URL.replace('/api', '')}/${currentLesson.videoUrl.replace(/\\/g, '/')}`.replace(/\/+/g, '/').replace(':/', '://')}
+                                                                    type="video/mp4"
+                                                                />
                                                                     Your browser does not support video tag.
                                                                 </video>
                                                             )}
@@ -761,7 +780,27 @@ function CourseDetailsContent({ course: propCourse }) {
 
                                     <div className="udemy-content-video d-flex align-items-start justify-content-between">
                                         <div>
-                                            <h5>{course.title || 'Course Title'}</h5>
+                                            <h5>{getLangText(course.title, userLanguage) || 'Course Title'}</h5>
+                                            <div className="cart-details-bx mb-2">
+                                                <ul className="rating-list">
+                                                    {[...Array(5)].map((_, index) => {
+                                                        const starValue = index + 1;
+                                                        const rating = course.averageRating || 0;
+                                                        return (
+                                                            <li key={index} className="rating-item">
+                                                                <IoIosStar
+                                                                    style={{ color: rating >= starValue ? '#ffc107' : rating >= starValue - 0.5 ? '#ffc107' : '#e4e5e9' }}
+                                                                />
+                                                            </li>
+                                                        );
+                                                    })}
+                                                    <li className="rating-item ps-1">
+                                                        <span className="rating-number">
+                                                            {course.averageRating?.toFixed(1) || "0.0"} ({course.numReviews || 0} reviews)
+                                                        </span>
+                                                    </li>
+                                                </ul>
+                                            </div>
                                             <p>Posted {course.createdAt ? new Date(course.createdAt).toLocaleDateString() : 'Recently'}</p>
                                         </div>
 
@@ -838,6 +877,19 @@ function CourseDetailsContent({ course: propCourse }) {
                                                 Review
                                             </a>
                                         </li>
+
+                                        <li className="nav-item" role="presentation">
+                                            <a
+                                                className="nav-link nw-nav-link"
+                                                id="faq-tab"
+                                                data-bs-toggle="tab"
+                                                href="#faq-section"
+                                                role="tab"
+                                                onClick={() => setIsReview(false)}
+                                            >
+                                                FAQ
+                                            </a>
+                                        </li>
                                     </ul>
 
                                     <div className="employee-tabs payment-tp-border">
@@ -849,36 +901,42 @@ function CourseDetailsContent({ course: propCourse }) {
                                             >
                                                 <div className="udemy-description">
                                                     <h6 className="first_para">Descriptions</h6>
-                                                    <p>
-                                                        {course.description || 'Course description will be displayed here. This course covers comprehensive topics and provides in-depth learning experience.'}
+                                                    <p className="course-desc" style={{ whiteSpace: 'pre-line' }}>
+                                                        {getLangText(course.description, userLanguage) || 'Course description will be displayed here. This course covers comprehensive topics and provides in-depth learning experience.'}
                                                     </p>
                                                 </div>
 
-                                                {course?.whatYouWillLearn?.length > 0 && (
-                                                    <div className="udemy-description">
-                                                        <h6 className="first_para">What I Will Learn</h6>
-                                                        <ul className="ud-description-list">
-                                                            {course.whatYouWillLearn.map((item, index) => (
-                                                                <li key={index} className="ud-item pb-2">
-                                                                    {item}
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
+                                                {course?.whatYouWillLearn && (() => {
+                                                    const learnList = Array.isArray(course.whatYouWillLearn)
+                                                        ? course.whatYouWillLearn
+                                                        : (course.whatYouWillLearn[userLanguage === 'Kannada' ? 'kn' : 'en'] || course.whatYouWillLearn.en || []);
+                                                    return learnList.length > 0 && (
+                                                        <div className="udemy-description">
+                                                            <h6 className="first_para">What I Will Learn</h6>
+                                                            <ul className="ud-description-list">
+                                                                {learnList.map((item, index) => (
+                                                                    <li key={index} className="ud-item pb-2">{item}</li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    );
+                                                })()}
 
-                                                {course?.requirements?.length > 0 && (
-                                                    <div className="udemy-description">
-                                                        <h6 className="first_para">Requirements</h6>
-                                                        <ul className="ud-description-list">
-                                                            {course.requirements.map((item, index) => (
-                                                                <li key={index} className="ud-item pb-2">
-                                                                    {item}
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
+                                                {course?.requirements && (() => {
+                                                    const reqList = Array.isArray(course.requirements)
+                                                        ? course.requirements
+                                                        : (course.requirements[userLanguage === 'Kannada' ? 'kn' : 'en'] || course.requirements.en || []);
+                                                    return reqList.length > 0 && (
+                                                        <div className="udemy-description">
+                                                            <h6 className="first_para">Requirements</h6>
+                                                            <ul className="ud-description-list">
+                                                                {reqList.map((item, index) => (
+                                                                    <li key={index} className="ud-item pb-2">{item}</li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    );
+                                                })()}
 
                                                 <div className="payment-tp-border"></div>
 
@@ -892,25 +950,16 @@ function CourseDetailsContent({ course: propCourse }) {
                                                             <div className="bid-about-content">
                                                                 <p> Course Level</p>
                                                                 <h6 style={{ textTransform: 'capitalize' }}>{course?.level || 'Beginner'}</h6>
-                                                            </div>
-                                                        </div>
-                                                        <div className="bid-grid-box">
-                                                            <span className="bid-about-icon">
-                                                                <FaClock />
-                                                            </span>
-                                                            <div className="bid-about-content">
-                                                                <p>Availability</p>
-                                                                <h6>Lifetime</h6>
-                                                            </div>
-                                                        </div>
-                                                        <div className="bid-grid-box">
+                                                                       <div className="bid-grid-box">
                                                             <span className="bid-about-icon">
                                                                 <IoLanguage />
                                                             </span>
                                                             <div className="bid-about-content">
                                                                 <p>Language</p>
-                                                                <h6>{course?.language || 'English'}</h6>
+                                                                <h6>{getLangText(course?.language, userLanguage) || 'English'}</h6>
                                                             </div>
+                                                        </div>
+                                              </div>
                                                         </div>
                                                         <div className="bid-grid-box">
                                                             <span className="bid-about-icon">
@@ -1055,15 +1104,12 @@ function CourseDetailsContent({ course: propCourse }) {
                                                                         >
                                                                             <div className="accordion-title w-100 d-flex justify-content-between align-items-center pe-5">
                                                                                 <span>
-                                                                                    {sectionIndex + 1}. {section.title || `Section ${sectionIndex + 1}`}
-                                                                                    <a href="#" className="preview-btn ms-2">
-                                                                                        <FontAwesomeIcon icon={faLock} />
-                                                                                    </a>
+                                                                                    {sectionIndex + 1}. {getLangText(section.title, userLanguage) || `Section ${sectionIndex + 1}`}
                                                                                 </span>
                                                                             </div>
                                                                         </button>
                                                                         {/* Download button moved OUTSIDE the accordion-button to fix click bubbling */}
-                                                                        <div className="download-notes-box position-absolute" style={{ right: '60px', top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}>
+                                                                        <div className="download-notes-box " >
                                                                             <button
                                                                                 className="udemy-down-btn"
                                                                                 onClick={(e) => {
@@ -1076,7 +1122,8 @@ function CourseDetailsContent({ course: propCourse }) {
                                                                                     handleDownloadNotes();
                                                                                 }}
                                                                             >
-                                                                                Download Notes
+                                                                                <span className="mb-note-rm">Download Notes</span>
+                                                                                <span className="d-lg-none"><FontAwesomeIcon icon={faDownload}/></span>
                                                                             </button>
                                                                         </div>
                                                                     </h2>
@@ -1100,19 +1147,9 @@ function CourseDetailsContent({ course: propCourse }) {
                                                                                                 <a
                                                                                                     href="#"
                                                                                                     className="quiz-title"
-                                                                                                    onClick={() => {
-                                                                                                        if (!isPurchased && user?.role !== 'admin') {
-                                                                                                            toast.info("first buy the course to access video");
-                                                                                                            return;
-                                                                                                        }
-                                                                                                        setCurrentLesson(lesson);
-                                                                                                        setCurrentVideo(lesson.videoUrl);
-                                                                                                        setShowVideo(true);
-
-                                                                                                        window.scrollTo({
-                                                                                                            top: 0,
-                                                                                                            behavior: "smooth"
-                                                                                                        });
+                                                                                                    onClick={(e) => {
+                                                                                                        e.preventDefault();
+                                                                                                        handleLessonClick(lesson);
                                                                                                     }}
                                                                                                 >
 
@@ -1122,20 +1159,21 @@ function CourseDetailsContent({ course: propCourse }) {
                                                                                                         <MdQuiz className="file-icon" />
                                                                                                     )}
 
-                                                                                                    <span>{lessonIndex + 1}. {lesson.title}</span>
+                                                                                                    <span>{lessonIndex + 1}. {getLangText(lesson.title, userLanguage)}</span>
 
                                                                                                 </a>
                                                                                             </div>
 
                                                                                             <div>
-
-                                                                                                {completedLessons.has(lesson._id) ? (
-                                                                                                    <span className="course-com-title">Completed</span>
-                                                                                                ) : lesson.duration ? (
-                                                                                                    <span className="course-time-title">{lesson.duration}m</span>
-                                                                                                ) : null}
-
-                                                                                            </div>
+                                                                {(() => {
+                                                                    const lId = String(lesson._id);
+                                                                    return completedLessons.has(lId) ? (
+                                                                        <span className="course-com-title">Completed</span>
+                                                                    ) : lesson.duration ? (
+                                                                        <span className="course-time-title">{lesson.duration}m</span>
+                                                                    ) : null;
+                                                                })()}
+                                                            </div>
 
 
 
@@ -1170,12 +1208,8 @@ function CourseDetailsContent({ course: propCourse }) {
 
                                                                                                                 }}
                                                                                                             >
-                                                                                                                {completedLessons.has(lesson._id) ? (
-                                                                                                                    <MdQuiz className="file-icon me-2" />
-                                                                                                                ) : (
-                                                                                                                    <FontAwesomeIcon icon={faLock} className="file-icon me-2" />
-                                                                                                                )}
-                                                                                                                Quiz {quizIndex + 1} : {quiz.title || "Quiz"}
+                                                                                                                <MdQuiz className="file-icon me-2" />
+                                                                                                                Quiz {quizIndex + 1} : {getLangText(quiz.title, userLanguage) || "Quiz"}
                                                                                                             </a>
                                                                                                         </div>
 
@@ -1231,25 +1265,30 @@ function CourseDetailsContent({ course: propCourse }) {
                                                                     data-bs-toggle="dropdown"
                                                                     aria-expanded="false"
                                                                 >
-                                                                    Sort By <MdSort />
+                                                                    Sort By: {sortReviewBy === 'newest' ? 'Newest' : sortReviewBy === 'oldest' ? 'Oldest' : sortReviewBy === 'highest' ? 'Highest Rating' : 'Lowest Rating'} <MdSort />
                                                                 </a>
                                                                 <ul
                                                                     className="dropdown-menu dropdown-menu-end tble-action-menu admin-dropdown-card"
                                                                     aria-labelledby="acticonMenu2"
                                                                 >
                                                                     <li className="prescription-item">
-                                                                        <a href="#" className="prescription-nav" data-bs-toggle="modal" data-bs-target="#edit-Announcement">
-                                                                            Most Relevant
-                                                                        </a>
-                                                                    </li>
-                                                                    <li className="prescription-item">
-                                                                        <a href="#" className="prescription-nav" data-bs-toggle="modal" data-bs-target="#edit-Announcement">
+                                                                        <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSortReviewBy('newest'); }}>
                                                                             Newest
                                                                         </a>
                                                                     </li>
                                                                     <li className="prescription-item">
-                                                                        <a href="#" className="prescription-nav" >
+                                                                        <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSortReviewBy('oldest'); }}>
                                                                             Oldest
+                                                                        </a>
+                                                                    </li>
+                                                                    <li className="prescription-item">
+                                                                        <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSortReviewBy('highest'); }}>
+                                                                            Highest Rating
+                                                                        </a>
+                                                                    </li>
+                                                                    <li className="prescription-item">
+                                                                        <a href="#" className="prescription-nav" onClick={(e) => { e.preventDefault(); setSortReviewBy('lowest'); }}>
+                                                                            Lowest Rating
                                                                         </a>
                                                                     </li>
                                                                 </ul>
@@ -1263,8 +1302,21 @@ function CourseDetailsContent({ course: propCourse }) {
                                                             <p className="text-center">No reviews yet</p>
                                                         )}
 
-                                                        {(showAllReviews ? reviews : reviews.slice(0, INITIAL_REVIEWS_COUNT)).map((review) => {
-                                                            const reviewer = review.userId;
+                                                        {(() => {
+                                                            let sortedReviews = [...reviews];
+                                                            if (sortReviewBy === 'newest') {
+                                                                sortedReviews.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                                                            } else if (sortReviewBy === 'oldest') {
+                                                                sortedReviews.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+                                                            } else if (sortReviewBy === 'highest') {
+                                                                sortedReviews.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+                                                            } else if (sortReviewBy === 'lowest') {
+                                                                sortedReviews.sort((a, b) => (a.rating || 0) - (b.rating || 0));
+                                                            }
+                                                            const displayedReviews = showAllReviews ? sortedReviews : sortedReviews.slice(0, INITIAL_REVIEWS_COUNT);
+                                                            
+                                                            return displayedReviews.map((review) => {
+                                                                const reviewer = review.userId;
                                                             const firstName = reviewer?.profile?.firstName || "";
                                                             const lastName = reviewer?.profile?.lastName || "";
                                                             const displayName = (firstName + " " + lastName).trim() || reviewer?.username || "User";
@@ -1298,7 +1350,7 @@ function CourseDetailsContent({ course: propCourse }) {
 
                                                                                 {[...Array(review.rating)].map((_, i) => (
                                                                                     <li key={i} className="rating-item">
-                                                                                        <IoIosStar />
+                                                                                        <span className="review-ration-btn"><IoIosStar /></span>
                                                                                     </li>
                                                                                 ))}
 
@@ -1312,7 +1364,7 @@ function CourseDetailsContent({ course: propCourse }) {
 
                                                                 </div>
                                                             );
-                                                        })}
+                                                        })})()}
 
                                                         {reviews.length > INITIAL_REVIEWS_COUNT && (
                                                             <div className="text-center mt-2">
@@ -1325,6 +1377,62 @@ function CourseDetailsContent({ course: propCourse }) {
                                                             </div>
                                                         )}
 
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Course FAQ Tab Pane */}
+                                            <div
+                                                className="tab-pane fade"
+                                                id="faq-section"
+                                                role="tabpanel"
+                                            >
+                                                <div className="col-lg-12 mb-3">
+                                                    <div className="d-flex align-items-center justify-content-between mb-3">
+                                                        <h3 className="first_para mb-0">Course FAQs</h3>
+                                                    </div>
+
+                                                    <div className="payment-tp-border">
+                                                        {faqLoading ? (
+                                                            <div className="text-center py-4">
+                                                                <div className="spinner-border text-primary" role="status">
+                                                                    <span className="visually-hidden">Loading...</span>
+                                                                </div>
+                                                            </div>
+                                                        ) : courseFAQs.length === 0 ? (
+                                                            <p className="text-center py-4">No FAQs available for this course yet.</p>
+                                                        ) : (
+                                                            <div className="accordion udemy-faq-accordion" id="courseFaqAccordion">
+                                                                {courseFAQs.map((faq, index) => (
+                                                                    <div className="accordion-item border-0 mb-3 shadow-sm rounded overflow-hidden" key={faq._id}>
+                                                                        <h2 className="accordion-header" id={`faqHeading${index}`}>
+                                                                            <button 
+                                                                                className={`accordion-button ${activeFaq === index ? '' : 'collapsed'} fw-bold py-3 px-4 bg-white text-dark`} 
+                                                                                type="button" 
+                                                                                onClick={() => setActiveFaq(activeFaq === index ? null : index)}
+                                                                                style={{ boxShadow: 'none' }}
+                                                                            >
+                                                                                <span className="me-3 text-primary">Q.</span> {faq.question}
+                                                                            </button>
+                                                                        </h2>
+                                                                        <div 
+                                                                            id={`faqCollapse${index}`} 
+                                                                            className={`accordion-collapse collapse ${activeFaq === index ? 'show' : ''}`} 
+                                                                            aria-labelledby={`faqHeading${index}`}
+                                                                        >
+                                                                            <div className="accordion-body py-3 px-4 bg-light-subtle border-top">
+                                                                                <div className="d-flex">
+                                                                                    <span className="me-3 text-success fw-bold">A.</span>
+                                                                                    <div className="text-muted" style={{ whiteSpace: 'pre-line' }}>
+                                                                                        {faq.answer}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -1386,44 +1494,25 @@ function CourseDetailsContent({ course: propCourse }) {
                                 </div>
 
                                 <div className="mt-4">
-                                    {isCheckingPurchase ? (
-                                        <button
-                                            className="thm-btn w-100"
-                                            disabled
-                                        >
-                                            Checking Purchase Status...
-                                        </button>
-                                    ) : (
-                                        <button
-                                            className="thm-btn w-100"
-                                            style={{
-                                                cursor: 'pointer',
-                                                zIndex: 10,
-                                                position: 'relative'
-                                            }}
-                                            onClick={() => {
-                                                if (!isPurchased && user?.role !== 'admin') {
-                                                    toast.info("first buy the course to access video");
-                                                    return;
-                                                }
-                                                const firstLesson = getFirstLesson();
-
-                                                if (!firstLesson) return;
-
-                                                setCurrentLesson(firstLesson);   // ⭐ important
-                                                setCurrentVideo(firstLesson.videoUrl);
-                                                setShowVideo(true);
-
-                                                window.scrollTo({
-                                                    top: 0,
-                                                    behavior: "smooth"
-                                                });
-
-                                            }}
-                                        >
-                                            {isPurchased ? 'Continue Learning' : 'Start Learning'}
-                                        </button>
-                                    )}
+                                    <button
+                                        className="thm-btn w-100"
+                                        style={{
+                                            cursor: 'pointer',
+                                            zIndex: 10,
+                                            position: 'relative'
+                                        }}
+                                        onClick={() => {
+                                            if (!isPurchased && user?.role !== 'admin') {
+                                                toast.info("First buy the course to access the video.");
+                                                return;
+                                            }
+                                            const firstLesson = getFirstLesson();
+                                            const targetState = firstLesson ? { state: { lessonId: firstLesson._id } } : {};
+                                            navigate(`/video-player/${course._id}`, targetState);
+                                        }}
+                                    >
+                                        Continue Learning
+                                    </button>
                                 </div>
 
                                 <div className="course-duration-content">

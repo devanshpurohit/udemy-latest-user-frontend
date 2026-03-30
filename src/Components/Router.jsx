@@ -24,12 +24,15 @@ import CoursesList from "./Pages/CoursesList";
 import TestLogin from "./Pages/TestLogin";
 import HomeRoute from "./Pages/HomeRoute";
 import ProtectedRoute from "./Pages/ProtectedRoute";
+import CourseGuard from "./Pages/CourseGuard";
+
 import Faq from "./Pages/Faq";
 import ContactUs from "./Pages/ContactUs";
 import PrivacyPolicy from "./Pages/PrivacyPolicy";
 import TermsConditions from "./Pages/TermsConditions";
 import CookiesPolicy from "./Pages/CookiesPolicy";
 import LicenseAgreement from "./Pages/LicenseAgreement";
+import Feedback from "./Pages/Feedback";
 
 function Router() {
     const router = createBrowserRouter([
@@ -100,8 +103,8 @@ function Router() {
                     element: <ProtectedRoute><AddCart /></ProtectedRoute>,
                 },
                 {
- path: "/my-course",
- element: <MyCourses />,
+  path: "/available-courses",
+  element: <MyCourses />,
 },
 
                 {
@@ -126,12 +129,12 @@ function Router() {
 
                 {
  path: "/course/:id",
- element: <CourseDetailsContentSecond />,
+ element: <CourseGuard mode="sales" />,
 },
 
 {
  path: "/course/:id/learn",
- element: <ProtectedRoute><CourseDetailsContent /></ProtectedRoute>,
+ element: <CourseGuard mode="learn" />,
 },
 
                 {
@@ -163,8 +166,8 @@ function Router() {
                 },
 
                 {
-                    path: "/video-player",
-                    element: <VideoPlayer />,
+                    path: "/video-player/:id",
+                    element: <ProtectedRoute><VideoPlayer /></ProtectedRoute>,
                 },
 
                 {
@@ -185,6 +188,10 @@ function Router() {
                 {
                     path: "/contact-us",
                     element: <ContactUs />,
+                },
+                {
+                    path: "/feedback",
+                    element: <Feedback />,
                 },
 
                 {

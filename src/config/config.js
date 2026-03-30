@@ -20,7 +20,7 @@ const config = {
     AUTH: {
       LOGIN: '/auth/login',
       REGISTER: '/auth/register',
-      VERIFY: '/auth/verify'
+      VERIFY: '/auth/me'
     },
     USER: {
       LOGIN: '/auth/login',

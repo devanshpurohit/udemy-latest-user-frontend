@@ -65,6 +65,34 @@ const getStoredUser = () => {
     return getUser();
 };
 
+// Get or create unique device ID
+const getDeviceId = () => {
+    let deviceId = localStorage.getItem('deviceId');
+    if (!deviceId) {
+        deviceId = 'dev_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+        localStorage.setItem('deviceId', deviceId);
+    }
+    return deviceId;
+};
+
+const getDeviceInfo = () => {
+    const ua = navigator.userAgent;
+    let browser = "Unknown Browser";
+    if (ua.includes("Firefox")) browser = "Firefox";
+    else if (ua.includes("Chrome")) browser = "Chrome";
+    else if (ua.includes("Safari")) browser = "Safari";
+    else if (ua.includes("Edge")) browser = "Edge";
+    
+    let os = "Unknown OS";
+    if (ua.includes("Windows")) os = "Windows";
+    else if (ua.includes("Mac")) os = "MacOS";
+    else if (ua.includes("Linux")) os = "Linux";
+    else if (ua.includes("Android")) os = "Android";
+    else if (ua.includes("iOS")) os = "iOS";
+    
+    return `${browser} on ${os}`;
+};
+
 // Login function
 const login = async (username, password) => {
     try {
@@ -77,7 +105,12 @@ const login = async (username, password) => {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ 
+                username, 
+                password,
+                deviceId: getDeviceId(),
+                deviceInfo: getDeviceInfo()
+            })
         });
 
         console.log('🔍 Response status:', response.status);
@@ -330,8 +363,9 @@ const verifyToken = async () => {
 
         if (response.ok) {
             const data = await response.json();
-            setUser(data.user);
-            return { success: true, user: data.user };
+            const validUser = data?.data?.user || data?.user;
+            setUser(validUser);
+            return { success: true, user: validUser };
         } else {
             logout();
             return { success: false, error: 'Token expired' };

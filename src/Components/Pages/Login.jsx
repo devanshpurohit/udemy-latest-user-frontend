@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUser, faEye, faEyeSlash, faEnvelope, faLock } from '@fortawesome/free-solid-svg-icons';
 import { login } from '../../services/authService';
 import { useAuth } from '../../contexts/AuthContext';
+import { toast } from 'react-toastify';
 
 const Login = () => {
     const { login: authLogin } = useAuth();
@@ -37,11 +38,15 @@ const Login = () => {
                     console.log('🔍 Redirecting admin to dashboard...');
                     navigate('/admin/dashboard');
                 } else {
-                    console.log('🔍 Redirecting user to dashboard...');
-                    navigate('/my-dashboard');
+                    console.log('🔍 Redirecting user to home...');
+                    navigate('/');
                 }
             } else {
-                setError(result.error);
+                if (result.error && (result.error.toLowerCase().includes('device') || result.error.toLowerCase().includes('approval'))) {
+                    toast.warning(result.error);
+                } else {
+                    setError(result.error);
+                }
             }
         } catch (err) {
             setError('An unexpected error occurred. Please try again.');

@@ -136,7 +136,9 @@ input::-webkit-inner-spin-button {
 }
 
 input[type=number] {
+  -webkit-appearance: textfield;
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .img-40 {
@@ -497,9 +499,8 @@ input[type=number] {
   top: 0;
   left: 0;
   width: 100%;
-  z-index: 9999;
-
-  animation: slideDownSmooth 1.1s cubic-bezier(0.25, 0.8, 0.25, 1);
+  z-index: 999;
+  animation: slideDownSmooth 1.1s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
 }
 
@@ -570,19 +571,23 @@ input[type=number] {
 
 
 .navbar-light-box .navbar-brand img {
-  width: 80px;
+  width: 100px;
   height: 50px;
   object-fit: contain;
+  object-position: left;
 }
 
 
 .navbar-light-box .navbar-nav .nav-link {
+  display: inline-block;
   color: #1B1B1B;
   font-weight: 700;
   font-size: 16px;
   text-transform: capitalize;
   transition: 0.2s ease;
   text-align: start;
+  padding: 0px;
+
 }
 
 .navbar-menu-list {
@@ -606,7 +611,7 @@ input[type=number] {
 .navbar-light-box .navbar-nav .nav-link.active::after {
   content: "";
   position: absolute;
-  bottom: -8px;
+  bottom: -5px;
   left: 0;
   width: 100%;
   height: 3px;
@@ -981,13 +986,15 @@ input[type=number] {
 }
 
 .footer-logo {
-  width: 80px;
-  height: 50px;
+  width: 100px;
+  height: 100px;
   object-fit: contain;
+  object-position: left;
+
 }
 
 .footer-text {
-  margin-top: 30px;
+  margin-top: 15px;
 }
 
 .footer-text p {
@@ -1000,8 +1007,8 @@ input[type=number] {
 
 .social-nav-link {
   color: #fff;
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 400;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1109,19 +1116,25 @@ input[type=number] {
 
 .email-footer-send-box {
   position: absolute;
-  bottom: 20px;
-  right: 20px;
+  bottom: 4.5px;
+    right: 4px;
 }
-
-
+ 
+ 
 .email-ftr-btn {
-  display: inline-block;
-  color: #000000;
-  font-weight: 600;
-  font-size: 15px;
+  text-align: center;
+    background: linear-gradient(89.71deg, #2273D1 -45.81%, #113B6B 99.75%);
+    border: 1px solid #2172cf;
+    border-radius: 6px;
+    padding: 14px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all .35s;
   font-family: var(--inter-family);
+  color: #fff;
 }
-
+ 
+ 
 .email-ftr-btn:hover {
   color: #184F9E;
 }
@@ -1147,7 +1160,7 @@ input[type=number] {
   font-family: "Font Awesome 5 Free";
   font-weight: 900;
   color: #FFFFFF99;
-  
+
 }
 
 .admin-breadcrumb .custom-breadcrumb {
@@ -1239,20 +1252,30 @@ input[type=number] {
   font-family: var(--inter-family);
 }
 
-.admin-breadcrumb .custom-breadcrumb .breadcrumb-item+.breadcrumb-item::before {
+/* .admin-breadcrumb .custom-breadcrumb .breadcrumb-item+.breadcrumb-item::before {
   content: " > ";
   color: #fff;
+} */
+
+.admin-breadcrumb .custom-breadcrumb .breadcrumb-item + .breadcrumb-item::before {
+     content: "\f105";
+  font-family: "Font Awesome 5 Free";
+  font-weight: 900; 
+  color: #ffffff;
 }
+
+
+
+.admin-breadcrumb .quiz-breadcrumb .breadcrumb-item+.breadcrumb-item::before {
+  content: " > ";
+  color: #1B1B1B99;
+}
+
 
 .quiz-breadcrumb .breadcrumb-item {
   color: #1B1B1B99;
   font-weight: 500;
   font-family: var(--inter-family);
-}
-
-.admin-breadcrumb .quiz-breadcrumb .breadcrumb-item+.breadcrumb-item::before {
-  content: " > ";
-  color: #1B1B1B99;
 }
 
 .quiz-breadcrumb .breadcrumb-link {
@@ -1577,18 +1600,22 @@ input[type=number] {
   display: inline-block;
   background: transparent;
   border: none;
-  font-size: 14px;
+  font-size: 16px !important;
   color: #1B1B1B99;
   cursor: pointer;
   transition: color 0.3s ease, transform 0.3s ease;
-  padding: 5px;
+  width: 30px;
+  height: 30px;
+  line-height: 30px;
+  border-radius: 50%;
+  text-align: center;
 }
 
 .modal-close-btn:hover {
   background-color: #dc3545;
   transform: rotate(90deg);
-  color: #fff;
-  border-radius: 6px;
+  color: #fff !important;
+  /* border-radius: 6px; */
 }
 
 .offer-modal-content {
@@ -1952,7 +1979,6 @@ input[type=number] {
   gap: 10px;
 }
 
-.cart-banner-box {}
 
 .cart-banner-box img {
   width: 314px;
@@ -2066,7 +2092,6 @@ input[type=number] {
   font-weight: 600;
   font-size: 16px;
   line-height: 30px;
-  vertical-align: middle;
   display: block;
   width: 100%;
   padding: 7px 30px 7px 15px;
@@ -2190,9 +2215,7 @@ set password */
 
 .udemy-cards:hover {
   transform: translateY(-8px);
-  box-shadow:
-    0px 22px 45px rgba(33, 114, 207, 0.32),
-    0px 10px 20px rgba(33, 114, 207, 0.22);
+
 }
 
 .udemy-picture {
@@ -2245,14 +2268,14 @@ set password */
   font-weight: 500;
   font-size: 10px;
   margin-bottom: 0px;
-  color: #2172CF;
+  color: hsl(212, 73%, 47%);
 }
 
 .complete-label {
   font-weight: 500;
   font-size: 10px;
   margin-bottom: 0px;
-  color: #33BA04;
+  color: hsl(212, 73%, 47%);
 }
 
 .custom-progress {
@@ -2272,7 +2295,7 @@ set password */
 }
 
 .custom-progress .complete-bar {
-  background-color: #33BA04 !important;
+  background-color: #2172CF !important;
   border-radius: 10px;
 }
 
@@ -2965,6 +2988,15 @@ set password */
 .udemy-down-btn:hover {
   background-color: #184F9E;
 }
+
+.download-notes-box {
+  position: absolute;
+  top: -5px;
+  right: 30px;
+  z-index: 9;
+}
+
+
 
 .review-control {
   height: 250px !important;
@@ -4182,14 +4214,17 @@ set password */
 .zx-faq-accordion .accordion-button {
   position: relative;
   font-weight: 600;
-  padding-right: 40px;
+  padding-right: 45px;
+  line-height: 1.4;
 }
 
 .zx-faq-accordion .accordion-button::before {
   content: "+";
   position: absolute;
-  right: 15px;
-  font-size: 20px;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 22px;
   font-weight: bold;
   transition: 0.3s ease;
   color: #2172CF;
@@ -4210,11 +4245,11 @@ set password */
   background-color: #fff !important;
   border-bottom: 0px !important;
   font-family: var(--inter-family);
-  font-weight: 500;
-  font-size: 18px;
-  line-height: 100%;
-  color: #000000;
-
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.4;
+  color: #111827;
+  padding: 18px 20px;
 }
 
 .zx-faq-btn:focus {
@@ -4224,9 +4259,10 @@ set password */
 .faq-section .accordion-body {
   font-family: var(--inter-family);
   font-weight: 400;
-  font-size: 16px;
-  line-height: 100%;
-  color: #1B1B1B99;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #4B5563;
+  padding: 0 20px 20px 20px;
 }
 
 
@@ -4247,6 +4283,10 @@ set password */
 
 .zx-faq-accordion .accordion-body {
   border-top: none;
+}
+
+.udemy-learn-content h5 {
+  margin-bottom: 12px;
 }
 
 .continue-section {
@@ -4893,3 +4933,14 @@ set password */
   font-weight: 700;
   border: 2px solid #fff;
 }
+
+.course-desc {
+    line-height: 1.6 !important;
+    letter-spacing: 0.3px;
+    margin-bottom: 8px !important;
+}
+
+
+
+
+/* style={{ right: '60px', top: '50%', transform: 'translateY(-50%)', zIndex: 10 }} */

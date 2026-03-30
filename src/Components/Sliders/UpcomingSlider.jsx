@@ -1,18 +1,7 @@
 import React from 'react';
-import { Splide, SplideSlide } from '@splidejs/react-splide';
-import '@splidejs/react-splide/css';
 import CourseCard from '../Common/CourseCard';
-import { FaArrowLeft, FaArrowRight } from "react-icons/fa";
 
 const UpcomingSlider = ({ upcomingCourses = [], loading, error, onRetry, splideRef }) => {
-    const goPrev = () => {
-        splideRef.current?.splide.go("<");
-    };
-
-    const goNext = () => {
-        splideRef.current?.splide.go(">");
-    };
-
     return (
         <div>
             {loading ? (
