@@ -7,7 +7,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { BsCreditCardFill } from "react-icons/bs";
 import { IoInformationCircle } from "react-icons/io5";
 import { useAuth } from '../../contexts/AuthContext';
-import { login, forgotPassword as authForgotPassword, resendOTP as authResendOtp, verifyOtp as authVerifyOtp, resetPassword as authResetPassword, verifyAICard, register as authRegister } from '../../services/authService';
+import { login, forgotPassword as authForgotPassword, resendOTP as authResendOtp, verifyOtp as authVerifyOtp, resetPassword as authResetPassword, verifyAICard, register as authRegister, requestUnblock as authRequestUnblock } from '../../services/authService';
 import { useSettings } from "../../contexts/SettingsContext";
 
 
@@ -22,6 +22,11 @@ const Header = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+
+    const [blockedUserInfo, setBlockedUserInfo] = useState(null);
+    const [unblockReason, setUnblockReason] = useState('');
+    const [unblockLoading, setUnblockLoading] = useState(false);
+    const [unblockMessage, setUnblockMessage] = useState('');
 
 
     const [forgotEmail, setForgotEmail] = useState('');
@@ -136,7 +141,17 @@ const Header = () => {
                 // Navigate to home
                 navigate('/');
             } else {
-                if (result.error && (result.error.toLowerCase().includes('device') || result.error.toLowerCase().includes('approval'))) {
+                if (result.isBlocked) {
+                    setBlockedUserInfo({ userId: result.userId, email: result.email });
+                    // Close login modal
+                    const modal = document.getElementById('loginModal');
+                    if (modal) {
+                        const bsModal = window.bootstrap?.Modal?.getInstance(modal) || new window.bootstrap.Modal(modal);
+                        bsModal.hide();
+                    }
+                    // Open block modal
+                    showModal('blockedModal');
+                } else if (result.error && (result.error.toLowerCase().includes('device') || result.error.toLowerCase().includes('approval'))) {
                     toast.warning(result.error);
                 } else {
                     setError(result.error);
@@ -373,18 +388,46 @@ const Header = () => {
     const hideModal = (id) => {
         const modalEl = document.getElementById(id);
         if (modalEl) {
-            const modal = window.bootstrap?.Modal?.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
-            modal.hide();
+            const modal = window.bootstrap?.Modal?.getInstance(modalEl);
+            if (modal) modal.hide();
         }
+        cleanupBackdrops();
     };
 
     const showModal = (id) => {
         const modalEl = document.getElementById(id);
         if (modalEl) {
-            const modal = new window.bootstrap.Modal(modalEl);
+            // Remove lingering backdrops before showing a new modal to prevent overlaps
+            const existingBackdrops = document.querySelectorAll('.modal-backdrop');
+            if (existingBackdrops.length > 0) {
+                existingBackdrops.forEach(b => b.remove());
+                document.body.classList.remove('modal-open');
+            }
+            const modal = window.bootstrap?.Modal?.getInstance(modalEl) || new window.bootstrap.Modal(modalEl);
             modal.show();
         }
     };
+
+    const cleanupBackdrops = () => {
+        setTimeout(() => {
+            if (!document.querySelector('.modal.show')) {
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                backdrops.forEach(b => b.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            }
+        }, 400);
+    };
+
+    // Global listener to ensure backdrops are always removed when any modal finishes closing
+    useEffect(() => {
+        const handleHidden = () => {
+            cleanupBackdrops();
+        };
+        document.addEventListener('hidden.bs.modal', handleHidden);
+        return () => document.removeEventListener('hidden.bs.modal', handleHidden);
+    }, []);
 
     const handleRegOtpChange = (element, index) => {
         if (isNaN(element.value)) return;
@@ -401,6 +444,29 @@ const Header = () => {
             if (!regOtp[index] && e.target.previousSibling) {
                 e.target.previousSibling.focus();
             }
+        }
+    };
+
+    const handleUnblockRequest = async () => {
+        if (!blockedUserInfo) return;
+        setUnblockLoading(true);
+        setUnblockMessage('');
+        try {
+            const result = await authRequestUnblock(blockedUserInfo.userId, blockedUserInfo.email, unblockReason);
+            if (result.success) {
+                setUnblockMessage('Your request has been sent to the admin. Please wait for approval.');
+                toast.success('Unblock request sent successfully!');
+                setTimeout(() => {
+                    hideModal('blockedModal');
+                }, 3000);
+            } else {
+                setUnblockMessage('Error: ' + result.error);
+                toast.error(result.error);
+            }
+        } catch (error) {
+            setUnblockMessage('An error occurred. Please try again.');
+        } finally {
+            setUnblockLoading(false);
         }
     };
 
@@ -541,6 +607,45 @@ const Header = () => {
 
             {/* Mobile overlay */}
             {menuOpen && <div className="mobile-overlay" onClick={closeMenu}></div>}
+
+            {/* Blocked Modal */}
+            <div className="modal fade" id="blockedModal" data-bs-backdrop="static" data-bs-keyboard="false" tabIndex="-1" aria-labelledby="blockedModalLabel" aria-hidden="true" style={{ zIndex: 10000 }}>
+                <div className="modal-dialog modal-dialog-centered">
+                    <div className="modal-content text-center p-4">
+                        <div className="text-end mb-2">
+                            <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close" onClick={() => setBlockedUserInfo(null)}></button>
+                        </div>
+                        <h4 className="text-danger mb-3">You are blocked by Admin</h4>
+                        <p className="mb-4">Your account has been deactivated. You cannot log in at this time. Please request the admin to unblock your account.</p>
+                        
+                        <div className="mb-3 text-start">
+                            <label className="form-label text-muted">Reason for unblock (Optional)</label>
+                            <textarea 
+                                className="form-control" 
+                                rows="3" 
+                                placeholder="Please unblock me because..."
+                                value={unblockReason}
+                                onChange={(e) => setUnblockReason(e.target.value)}
+                                disabled={unblockLoading}
+                            ></textarea>
+                        </div>
+
+                        {unblockMessage && (
+                            <div className={`alert ${unblockMessage.includes('Error') ? 'alert-danger' : 'alert-success'} py-2 mb-3`}>
+                                {unblockMessage}
+                            </div>
+                        )}
+
+                        <button 
+                            className="thm-btn w-100 mt-2" 
+                            onClick={handleUnblockRequest}
+                            disabled={unblockLoading}
+                        >
+                            {unblockLoading ? 'Sending Request...' : 'Request to Unblock'}
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             {/*Login Popup Start  */}
             {/* data-bs-toggle="modal" data-bs-target="#loginModal" */}

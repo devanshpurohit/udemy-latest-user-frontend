@@ -141,7 +141,13 @@ const login = async (username, password) => {
             return { success: true, data };
         } else {
             console.log('🔍 Error response:', data);
-            return { success: false, error: data.message || 'Login failed' };
+            return { 
+                success: false, 
+                error: data.message || 'Login failed',
+                isBlocked: data.isBlocked,
+                userId: data.userId,
+                email: data.email
+            };
         }
     } catch (error) {
         console.error('Login error:', error);
@@ -421,6 +427,27 @@ const resendOTP = async (email) => {
     }
 };
 
+const requestUnblock = async (userId, email, reason = '') => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/request-unblock`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ userId, email, reason })
+        });
+        const data = await response.json();
+        if (response.ok) {
+            return { success: true, data };
+        } else {
+            return { success: false, error: data.message || 'Failed to request unblock' };
+        }
+    } catch (error) {
+        console.error('Request unblock error:', error);
+        return { success: false, error: 'Network error. Please try again.' };
+    }
+};
+
 export {
     login,
     register,
@@ -434,8 +461,9 @@ export {
     setToken,
     setUser,
     forgotPassword,
-    resendOTP,
     verifyOtp,
     resetPassword,
-    verifyAICard
+    verifyAICard,
+    resendOTP,
+    requestUnblock
 };

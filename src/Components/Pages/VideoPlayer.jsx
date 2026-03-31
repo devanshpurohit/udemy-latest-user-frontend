@@ -10,6 +10,7 @@ import config from "../../config/config";
 import { useAuth } from "../../contexts/AuthContext";
 import { toast } from "react-toastify";
 import { getLangText } from "../../utils/languageUtils";
+import { updateWatchTime } from "../../services/apiService";
 
 // 🎥 YouTube detection helpers
 const isYouTube = (url, language) => {
@@ -45,11 +46,65 @@ function VideoPlayer() {
     const [currentLesson, setCurrentLesson] = useState(null);
     const [completedLessons, setCompletedLessons] = useState(new Set());
     const [progressPercentage, setProgressPercentage] = useState(0);
+    const [watchTimeLimitReached, setWatchTimeLimitReached] = useState(false);
 
     // Review Modal States
     const [rating, setRating] = useState(5);
     const [reviewText, setReviewText] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Watch Time Tracking Effect
+    useEffect(() => {
+        let interval;
+        
+        const checkWatchTime = async () => {
+            if (watchTimeLimitReached) return;
+            
+            let isPlaying = false;
+            
+            // Check native videoJS player
+            if (playerRef.current && !playerRef.current.paused()) {
+                isPlaying = true;
+            }
+            
+            // Check YouTube player
+            if (window.YT) {
+                const ytPlayer = window.YT.get("youtube-player-iframe");
+                if (ytPlayer && typeof ytPlayer.getPlayerState === 'function') {
+                    if (ytPlayer.getPlayerState() === window.YT.PlayerState.PLAYING) {
+                        isPlaying = true;
+                    }
+                }
+            }
+
+            if (isPlaying) {
+                try {
+                    const data = await updateWatchTime(10); // Check every 10 seconds
+                    if (data && data.success && data.limitReached) {
+                        setWatchTimeLimitReached(true);
+                        
+                        // Pause all players
+                        if (playerRef.current) playerRef.current.pause();
+                        if (window.YT) {
+                            const ytP = window.YT.get("youtube-player-iframe");
+                            if (ytP && typeof ytP.pauseVideo === 'function') ytP.pauseVideo();
+                        }
+                    }
+                } catch (err) {
+                    console.error("Watch time check error:", err);
+                }
+            }
+        };
+
+        // If not already reached the limit, set up the interval polling
+        if (!watchTimeLimitReached) {
+            interval = setInterval(checkWatchTime, 10000); // 10 seconds
+        }
+
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [watchTimeLimitReached, currentLesson]);
 
     // Fetch course data
     useEffect(() => {
@@ -422,31 +477,51 @@ function VideoPlayer() {
                 <div className="container-fluid">
                     <div className="row">
                         <div className="col-lg-8 px-0">
-                            <div className="custom-video-wrapper no-radius-video">
-                                {isYouTube(currentLesson?.videoUrl, userLanguage) ? (
-                                    <div className="youtube-player-container" style={{ position: 'relative', width: '100%', paddingTop: '56.25%' }}>
-                                        <iframe
-                                            id="youtube-player-iframe"
-                                            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: '0px' }}
-                                            src={getYouTubeEmbed(currentLesson.videoUrl, userLanguage) + (getYouTubeEmbed(currentLesson.videoUrl, userLanguage).includes('?') ? '&enablejsapi=1' : '?enablejsapi=1')}
-                                            title={getLangText(currentLesson.title, userLanguage)}
-                                            frameBorder="0"
-                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                            allowFullScreen
-                                        ></iframe>
-                                    </div>
-                                ) : (
-                                    <video
-                                        ref={videoRef}
-                                        className="video-js vjs-big-play-centered custom-video"
-                                        controls
-                                        preload="auto"
-                                        poster={course.thumbnail && !course.thumbnail.startsWith('http') 
-                                            ? `${config.API_BASE_URL.replace('/api', '')}/${course.thumbnail.replace(/\\/g, '/')}`.replace(/\/+/g, '/').replace(':/', '://')
-                                            : (course.thumbnail || course.courseImage || "/course_banner.png")}
-                                    >
-                                    </video>
-                                )}
+                            <div className="custom-video-wrapper no-radius-video" style={{ position: 'relative' }}>
+                                {/* Safe Overlay Container - React can safely add/remove children here without interference from Video.js */}
+                                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: watchTimeLimitReached ? 9999 : -1, pointerEvents: watchTimeLimitReached ? 'auto' : 'none' }}>
+                                    {watchTimeLimitReached && (
+                                        <div className="watch-limit-overlay" style={{
+                                            width: '100%', height: '100%',
+                                            backgroundColor: 'rgba(0,0,0,0.95)', display: 'flex',
+                                            flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', padding: '20px', textAlign: 'center'
+                                        }}>
+                                            <h3 className="mb-3 text-white"><FontAwesomeIcon icon={faLock} className="me-2" />Daily Limit Reached</h3>
+                                            <p style={{ fontSize: '18px', maxWidth: '600px' }}>
+                                                You've reached your daily learning limit for today. Great job staying consistent! 
+                                                Taking time to process what you've learned is essential. Please come back tomorrow to unlock more content.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                {/* Safe Video Container */}
+                                <div className="video-safe-container">
+                                    {isYouTube(currentLesson?.videoUrl, userLanguage) ? (
+                                        <div className="youtube-player-container" style={{ position: 'relative', width: '100%', paddingTop: '56.25%' }}>
+                                            <iframe
+                                                id="youtube-player-iframe"
+                                                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: '0px' }}
+                                                src={getYouTubeEmbed(currentLesson.videoUrl, userLanguage) + (getYouTubeEmbed(currentLesson.videoUrl, userLanguage).includes('?') ? '&enablejsapi=1' : '?enablejsapi=1')}
+                                                title={getLangText(currentLesson.title, userLanguage)}
+                                                frameBorder="0"
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                allowFullScreen
+                                            ></iframe>
+                                        </div>
+                                    ) : (
+                                        <video
+                                            ref={videoRef}
+                                            className="video-js vjs-big-play-centered custom-video"
+                                            controls
+                                            preload="auto"
+                                            poster={course.thumbnail && !course.thumbnail.startsWith('http') 
+                                                ? `${config.API_BASE_URL.replace('/api', '')}/${course.thumbnail.replace(/\\/g, '/')}`.replace(/\/+/g, '/').replace(':/', '://')
+                                                : (course.thumbnail || course.courseImage || "/course_banner.png")}
+                                        >
+                                        </video>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="video-details-content">

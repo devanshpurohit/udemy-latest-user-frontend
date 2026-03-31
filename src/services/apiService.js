@@ -582,3 +582,18 @@ export const getCurrentUser = () => {
 export const isAuthenticated = () => {
     return !!getToken();
 };
+
+export const updateWatchTime = async (seconds) => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/watch-time`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ seconds })
+        });
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Update watch time error:', error);
+        return { success: false, error: 'Network error updating watch time' };
+    }
+};

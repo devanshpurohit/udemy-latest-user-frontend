@@ -950,7 +950,9 @@ function CourseDetailsContent({ course: propCourse }) {
                                                             <div className="bid-about-content">
                                                                 <p> Course Level</p>
                                                                 <h6 style={{ textTransform: 'capitalize' }}>{course?.level || 'Beginner'}</h6>
-                                                                       <div className="bid-grid-box">
+                                                            </div>
+                                                        </div>
+                                                        <div className="bid-grid-box">
                                                             <span className="bid-about-icon">
                                                                 <IoLanguage />
                                                             </span>
@@ -958,8 +960,6 @@ function CourseDetailsContent({ course: propCourse }) {
                                                                 <p>Language</p>
                                                                 <h6>{getLangText(course?.language, userLanguage) || 'English'}</h6>
                                                             </div>
-                                                        </div>
-                                              </div>
                                                         </div>
                                                         <div className="bid-grid-box">
                                                             <span className="bid-about-icon">
